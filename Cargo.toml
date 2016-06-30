@@ -1,0 +1,12 @@
+[package]
+name = "quantiles"
+version = "0.1.0"
+authors = ["Brian L. Troutwine <blt@postmates.com>"]
+
+[profile.release]
+lto = true
+
+[dev-dependencies]
+quickcheck = "0.2"
+
+[dependencies]
