@@ -11,7 +11,6 @@
 #[cfg(test)]
 extern crate quickcheck;
 
-use std::collections::BinaryHeap;
 use std::fmt::Debug;
 
 #[derive(Debug,Clone)]
@@ -70,7 +69,7 @@ pub struct CKMS<T: Copy> {
     // We store incoming points in a priority queue and every insert_threshold
     // items drain buffer into samples. This is the 'cursor' method of the
     // paper.
-    buffer: BinaryHeap<T>,
+    buffer: Vec<T>,
 
     // This is the S(n) of the above paper. Entries are stored here and
     // occasionally merged. The outlined implementation uses a linked list but
@@ -80,7 +79,6 @@ pub struct CKMS<T: Copy> {
 }
 
 impl<T: Copy + PartialOrd + Debug> CKMS<T>
-    where T: std::cmp::Ord
 {
     /// Create a new CKMS
     ///
@@ -112,7 +110,7 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
             insert_threshold: insert_threshold as usize,
             inserts: 0,
 
-            buffer: BinaryHeap::<T>::new(),
+            buffer: Vec::<T>::new(),
             samples: Vec::<Entry<T>>::new(),
         }
     }
@@ -124,7 +122,17 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
     /// may grow gradually, as defined in the module-level documentatio, but
     /// will remain bounded.
     pub fn insert(&mut self, v: T) {
-        self.buffer.push(v);
+        // NOTE This is O(n) but n is relatively small unless ε is very, very
+        // small. A clear optimization here is to make insertion sub-linear.
+        let mut idx = 0;
+        for i in 0..self.buffer.len() {
+            if v < self.buffer[i] {
+                break;
+            } else {
+                idx += 1;
+            }
+        }
+        self.buffer.insert(idx, v);
         self.inserts = (self.inserts + 1) % self.insert_threshold;
         if self.inserts == 0 {
             self.flush()
@@ -311,6 +319,19 @@ mod test {
             .quickcheck(query_invariant as fn(f64, Vec<i64>) -> TestResult);
     }
 
+    #[test]
+    fn insert_test() {
+        let mut ckms = CKMS::<f64>::new(0.001);
+        for i in 0..2 {
+            ckms.insert(i as f64);
+        }
+        ckms.flush();
+
+        assert_eq!(0.0, ckms.samples[0].v);
+        assert_eq!(1.0, ckms.samples[1].v);
+    }
+
+
     // prop: v_i-1 < v_i =< v_i+1
     #[test]
     fn asc_samples_test() {
@@ -450,5 +471,16 @@ mod test {
         assert_eq!(ckms.query(0.95), Some((950, 950)));
         assert_eq!(ckms.query(0.99), Some((990, 990)));
         assert_eq!(ckms.query(1.00), Some((1000, 1000)));
+    }
+
+    #[test]
+    fn test_basics_float() {
+        let mut ckms = CKMS::<f64>::new(0.001);
+        for i in 1..1001 {
+            ckms.insert(i as f64);
+        }
+
+        assert_eq!(ckms.query(0.00), Some((1, 1.0)));
+        assert_eq!(ckms.query(1.00), Some((1000, 1000.0)));
     }
 }
