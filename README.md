@@ -8,7 +8,7 @@ tradeoffs.
 Initial work was done to support internal Postmates projects but the hope is
 that the crate can be generally useful.
 
-[![Build Status](https://travis-ci.com/postmates/quantiles.svg?token=YZ973qi8DocmxHi3Nn48&branch=master)](https://travis-ci.com/postmates/quantiles)
+[![Build Status](https://travis-ci.org/postmates/quantiles.svg?branch=master)](https://travis-ci.org/postmates/quantiles)
 
 ## The Algorithms
 
