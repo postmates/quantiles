@@ -95,10 +95,13 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
     /// use quantiles::CKMS;
     ///
     /// let mut ckms = CKMS::<u16>::new(0.001);
-    /// for i in 1..1000 {
+    /// for i in 1..1001 {
     ///     ckms.insert(i as u16);
     /// }
-    /// assert_eq!(ckms.query(0.999), Some((998, 998)));
+    /// assert_eq!(ckms.query(0.0), Some((1, 1)));
+    /// assert_eq!(ckms.query(0.998), Some((998, 998)));
+    /// assert_eq!(ckms.query(0.999), Some((999, 999)));
+    /// assert_eq!(ckms.query(1.0), Some((1000, 1000)));
     /// ```
     pub fn new(error: f64) -> CKMS<T> {
         let insert_threshold = 1.0 / (2.0 * error);
@@ -161,9 +164,7 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
     /// assert_eq!(ckms.query(0.998), Some((998, 997)));
     /// assert_eq!(ckms.query(1.0), Some((1000, 999)));
     /// ```
-    pub fn query(&mut self, q: f64) -> Option<(usize, T)> {
-        self.flush();
-
+    pub fn query(&self, q: f64) -> Option<(usize, T)> {
         let s = self.samples.len();
 
         if s == 0 {
@@ -188,6 +189,31 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
 
         let v = self.samples[s - 1].v;
         Some((s, v))
+    }
+
+    /// Force CKMS to flush its internal buffers, compress
+    ///
+    /// In normal operation a CKMS will periodically flush its insert buffer
+    /// into the sample collection and then compress said collection. However,
+    /// it may sometimes be desirable to force a flush. Points in the insert
+    /// buffer _will not_ reflect in any queries. This may only be a concern
+    /// when the rate of points flowing into the CKMS is low.
+    /// # Examples
+    /// ```
+    /// use quantiles::CKMS;
+    ///
+    /// let mut ckms = CKMS::<u16>::new(0.001);
+    /// for i in 0..100 {
+    ///     ckms.insert(i as u16);
+    /// }
+    ///
+    /// assert_eq!(ckms.query(0.0), None);
+    /// ckms.flush();
+    /// assert_eq!(ckms.query(0.0), Some((1, 0)));
+    /// ```
+    pub fn flush(&mut self) {
+        self.insert_batch();
+        self.compress();
     }
 
     #[inline]
@@ -273,11 +299,6 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
             self.n += 1;
             s += 1;
         }
-    }
-
-    fn flush(&mut self) {
-        self.insert_batch();
-        self.compress();
     }
 }
 

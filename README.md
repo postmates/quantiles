@@ -30,14 +30,15 @@ Quantiles over Data Streams"
 ```
 use quantiles::CKMS;
 
-let mut ckms = CKMS::<u16>::new(0.001); // ε = 0.001
-for i in 0..1000 {
+let mut ckms = CKMS::<u16>::new(0.001);
+for i in 1..1001 {
     ckms.insert(i as u16);
 }
 
-assert_eq!(ckms.query(0.0), Some((1, 0)));       // Φ = 0.0
-assert_eq!(ckms.query(0.998), Some((998, 997))); // Φ = 0.998
-assert_eq!(ckms.query(1.0), Some((1000, 999)));  // Φ = 1.0
+assert_eq!(ckms.query(0.0), Some((1, 1)));
+assert_eq!(ckms.query(0.998), Some((998, 998)));
+assert_eq!(ckms.query(0.999), Some((999, 999)));
+assert_eq!(ckms.query(1.0), Some((1000, 1000)));
 ```
 
 Queries provide an approximation to the true quantile, +/- εΦn. In the above, ε
