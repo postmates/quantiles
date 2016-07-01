@@ -66,11 +66,6 @@ pub struct CKMS<T: Copy> {
     // queries for all quantiles will have the same error factor.
     error: f64,
 
-    // We store incoming points in a priority queue and every insert_threshold
-    // items drain buffer into samples. This is the 'cursor' method of the
-    // paper.
-    buffer: Vec<T>,
-
     // This is the S(n) of the above paper. Entries are stored here and
     // occasionally merged. The outlined implementation uses a linked list but
     // we prefer a Vec for reasons of cache locality at the cost of worse
@@ -78,8 +73,7 @@ pub struct CKMS<T: Copy> {
     samples: Vec<Entry<T>>,
 }
 
-impl<T: Copy + PartialOrd + Debug> CKMS<T>
-{
+impl<T: Copy + PartialOrd + Debug> CKMS<T> {
     /// Create a new CKMS
     ///
     /// A CKMS is meant to answer quantile queries with a known error bound. If
@@ -113,7 +107,6 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
             insert_threshold: insert_threshold as usize,
             inserts: 0,
 
-            buffer: Vec::<T>::new(),
             samples: Vec::<Entry<T>>::new(),
         }
     }
@@ -122,23 +115,46 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
     ///
     /// Insertion will gradulally shift the approximate quantiles. This
     /// implementation is biased toward fast writes and slower queries. Storage
-    /// may grow gradually, as defined in the module-level documentatio, but
+    /// may grow gradually, as defined in the module-level documentation, but
     /// will remain bounded.
     pub fn insert(&mut self, v: T) {
-        // NOTE This is O(n) but n is relatively small unless ε is very, very
-        // small. A clear optimization here is to make insertion sub-linear.
-        let mut idx = 0;
-        for i in 0..self.buffer.len() {
-            if v < self.buffer[i] {
-                break;
-            } else {
-                idx += 1;
-            }
+        let s = self.samples.len();
+        let mut r = 0;
+        if s == 0 {
+            self.samples.insert(0,
+                                Entry {
+                                    v: v,
+                                    g: 1,
+                                    delta: 0,
+                                });
+            self.n += 1;
+            return;
         }
-        self.buffer.insert(idx, v);
+
+        let mut idx = 0;
+        for i in 0..s {
+            let smpl = &self.samples[i];
+            match cmp(smpl.v, v) {
+                Cmp::LT => idx += 1,
+                Cmp::EQ | Cmp::GT => break,
+            }
+            r += smpl.g;
+        }
+        let delta = if idx == 0 || idx == s {
+            0
+        } else {
+            self.invariant(r as f64) - 1
+        };
+        self.samples.insert(idx,
+                            Entry {
+                                v: v,
+                                g: 1,
+                                delta: delta,
+                            });
+        self.n += 1;
         self.inserts = (self.inserts + 1) % self.insert_threshold;
         if self.inserts == 0 {
-            self.flush()
+            self.compress();
         }
     }
 
@@ -191,31 +207,6 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
         Some((s, v))
     }
 
-    /// Force CKMS to flush its internal buffers, compress
-    ///
-    /// In normal operation a CKMS will periodically flush its insert buffer
-    /// into the sample collection and then compress said collection. However,
-    /// it may sometimes be desirable to force a flush. Points in the insert
-    /// buffer _will not_ reflect in any queries. This may only be a concern
-    /// when the rate of points flowing into the CKMS is low.
-    /// # Examples
-    /// ```
-    /// use quantiles::CKMS;
-    ///
-    /// let mut ckms = CKMS::<u16>::new(0.001);
-    /// for i in 0..100 {
-    ///     ckms.insert(i as u16);
-    /// }
-    ///
-    /// assert_eq!(ckms.query(0.0), None);
-    /// ckms.flush();
-    /// assert_eq!(ckms.query(0.0), Some((1, 0)));
-    /// ```
-    pub fn flush(&mut self) {
-        self.insert_batch();
-        self.compress();
-    }
-
     #[inline]
     fn invariant(&self, r: f64) -> usize {
         let i = (2.0 * self.error * r).floor() as usize;
@@ -260,46 +251,6 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T>
             }
         }
     }
-
-    fn insert_batch(&mut self) {
-        let mut s = self.samples.len();
-        while let Some(v) = self.buffer.pop() {
-            let mut r = 0;
-            if s == 0 {
-                self.samples.insert(0,
-                                    Entry {
-                                        v: v,
-                                        g: 1,
-                                        delta: 0,
-                                    });
-                self.n += 1;
-                continue;
-            }
-
-            let mut idx = 0;
-            for i in 0..s {
-                let smpl = &self.samples[i];
-                match cmp(smpl.v, v) {
-                    Cmp::LT => idx += 1,
-                    Cmp::EQ | Cmp::GT => break,
-                }
-                r += smpl.g;
-            }
-            let delta = if idx == 0 || idx == s {
-                0
-            } else {
-                self.invariant(r as f64) - 1
-            };
-            self.samples.insert(idx,
-                                Entry {
-                                    v: v,
-                                    g: 1,
-                                    delta: delta,
-                                });
-            self.n += 1;
-            s += 1;
-        }
-    }
 }
 
 #[cfg(test)]
@@ -308,6 +259,23 @@ mod test {
     use quickcheck::{QuickCheck, TestResult};
     use std::f64::consts::E;
 
+    #[test]
+    fn n_invariant_test() {
+        fn n_invariant(fs: Vec<i64>) -> bool {
+            let l = fs.len();
+
+            let mut ckms = CKMS::<i64>::new(0.001);
+            for f in fs {
+                ckms.insert(f);
+            }
+
+            ckms.n == l
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(n_invariant as fn(Vec<i64>) -> bool);
+    }
     // prop: forany phi. (phi*n - f(phi*n, n)/2) =< r_i =< (phi*n + f(phi*n, n)/2)
     #[test]
     fn query_invariant_test() {
@@ -322,7 +290,6 @@ mod test {
             for f in fs {
                 ckms.insert(f);
             }
-            ckms.flush();
 
             match ckms.query(phi) {
                 None => TestResult::passed(), // invariant to check here? n*phi + f > 1?
@@ -346,7 +313,6 @@ mod test {
         for i in 0..2 {
             ckms.insert(i as f64);
         }
-        ckms.flush();
 
         assert_eq!(0.0, ckms.samples[0].v);
         assert_eq!(1.0, ckms.samples[1].v);
@@ -362,7 +328,6 @@ mod test {
             for f in fs {
                 ckms.insert(f);
             }
-            ckms.flush();
 
             if ckms.samples.len() == 0 && fsc.len() == 0 {
                 return TestResult::passed();
@@ -391,7 +356,6 @@ mod test {
             for f in fs {
                 ckms.insert(f);
             }
-            ckms.flush();
 
             let s = ckms.samples.len();
             let mut r = 0;
@@ -422,12 +386,12 @@ mod test {
         for i in 1..10000 {
             ckms.insert(i);
         }
-        ckms.flush();
+        ckms.compress();
 
         let l = ckms.samples.len();
         let n = ckms.n;
         assert_eq!(9999, n);
-        assert_eq!(3763, l);
+        assert_eq!(3332, l);
     }
 
     // prop: post-compression, samples is bounded above by O(1/e log^2 en)
@@ -442,7 +406,7 @@ mod test {
             for f in fs {
                 ckms.insert(f);
             }
-            ckms.flush();
+            ckms.compress();
 
             let s = ckms.samples.len() as f64;
             let bound = (1.0 / ckms.error) * (ckms.error * (ckms.n as f64)).log10().powi(2);
