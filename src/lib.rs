@@ -4,7 +4,7 @@
 //! Order statistics is a rough business. Exact solutions are expensive in terms
 //! of memory and computation. Recent literature has advanced approximations but
 //! each have fundamental tradeoffs. This crate is intended to be a collection
-//! of approxiate algorithms that provide guarantees around space consumption.
+//! of approximate algorithms that provide guarantees around space consumption.
 
 #![deny(missing_docs)]
 
