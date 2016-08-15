@@ -8,6 +8,8 @@
 
 #![deny(missing_docs)]
 
+#![doc(html_root_url = "https://postmates.github.io/quantiles/")]
+
 #[cfg(test)]
 extern crate quickcheck;
 
