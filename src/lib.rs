@@ -209,6 +209,27 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T> {
         Some((s, v))
     }
 
+    /// Query CKMS for the count of its points
+    ///
+    /// This function returns the total number of points seen over the lifetime
+    /// of the datastructure, _not_ the number of points currently stored in the
+    /// structure.
+    ///
+    /// # Examples
+    /// ```
+    /// use quantiles::CKMS;
+    ///
+    /// let mut ckms = CKMS::<u16>::new(0.001);
+    /// for i in 0..1000 {
+    ///     ckms.insert(i as u16);
+    /// }
+    ///
+    /// assert_eq!(ckms.count(), 1000);
+    /// ```
+    pub fn count(&self) -> usize {
+        self.n
+    }
+
     #[inline]
     fn invariant(&self, r: f64) -> usize {
         let i = (2.0 * self.error * r).floor() as usize;
@@ -271,7 +292,7 @@ mod test {
                 ckms.insert(f);
             }
 
-            ckms.n == l
+            ckms.count() == l
         }
         QuickCheck::new()
             .tests(10000)
@@ -391,7 +412,7 @@ mod test {
         ckms.compress();
 
         let l = ckms.samples.len();
-        let n = ckms.n;
+        let n = ckms.count();
         assert_eq!(9999, n);
         assert_eq!(3332, l);
     }
@@ -411,13 +432,13 @@ mod test {
             ckms.compress();
 
             let s = ckms.samples.len() as f64;
-            let bound = (1.0 / ckms.error) * (ckms.error * (ckms.n as f64)).log10().powi(2);
+            let bound = (1.0 / ckms.error) * (ckms.error * (ckms.count() as f64)).log10().powi(2);
 
             if !(s <= bound) {
                 println!("error: {:?} n: {:?} log10: {:?}",
                          ckms.error,
-                         ckms.n as f64,
-                         (ckms.error * (ckms.n as f64)).log10().powi(2));
+                         ckms.count() as f64,
+                         (ckms.error * (ckms.count() as f64)).log10().powi(2));
                 println!("{:?} <= {:?}", s, bound);
                 return TestResult::failed();
             }
