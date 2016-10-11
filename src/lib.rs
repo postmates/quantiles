@@ -282,6 +282,57 @@ mod test {
     use quickcheck::{QuickCheck, TestResult};
     use std::f64::consts::E;
 
+    fn percentile(data: &Vec<f64>, prcnt: f64) -> f64 {
+        let idx = (prcnt * (data.len() as f64)) as usize;
+        return data[idx];
+    }
+
+    #[test]
+    fn plain_percentiles() {
+        let data = vec![1.0, 2.0, 3.0, 4.0];
+        let mut ckms = CKMS::<f64>::new(0.001);
+        for d in &data {
+            ckms.insert(*d);
+        }
+
+        assert_eq!(Some((1, 1.0)), ckms.query(0.0));
+        assert_eq!(Some((1, 1.0)), ckms.query(0.1));
+        assert_eq!(Some((1, 1.0)), ckms.query(0.25));
+        assert_eq!(Some((2, 2.0)), ckms.query(0.5));
+        assert_eq!(Some((3, 3.0)), ckms.query(0.75));
+        assert_eq!(Some((4, 4.0)), ckms.query(1.0));
+    }
+
+    #[test]
+    fn error_nominal_test() {
+        fn inner(mut data: Vec<f64>, prcnt: f64) -> TestResult {
+            data.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            if !(prcnt >= 0.0) || !(prcnt <= 1.0) {
+                return TestResult::discard();
+            } else if data.len() < 1 {
+                return TestResult::discard();
+            }
+            let err = 0.001;
+
+            let mut ckms = CKMS::<f64>::new(err);
+            for d in &data {
+                ckms.insert(*d);
+            }
+
+            if let Some((_, v)) = ckms.query(prcnt) {
+                debug_assert!((v - percentile(&data, prcnt)) < err,
+                              "v: {} | percentile: {} | prcnt: {} | data: {:?}", v, percentile(&data, prcnt), prcnt, data);
+                TestResult::passed()
+            } else {
+                TestResult::failed()
+            }
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
+    }
+
     #[test]
     fn n_invariant_test() {
         fn n_invariant(fs: Vec<i64>) -> bool {
@@ -299,6 +350,7 @@ mod test {
             .max_tests(100000)
             .quickcheck(n_invariant as fn(Vec<i64>) -> bool);
     }
+
     // prop: forany phi. (phi*n - f(phi*n, n)/2) =< r_i =< (phi*n + f(phi*n, n)/2)
     #[test]
     fn query_invariant_test() {
