@@ -7,75 +7,30 @@
 //! of approximate algorithms that provide guarantees around space consumption.
 
 #![deny(missing_docs)]
-
 #![doc(html_root_url = "https://postmates.github.io/quantiles/")]
 
-#[cfg(test)]
-extern crate quickcheck;
+include!(concat!(env!("OUT_DIR"), "/ckms_types.rs"));
 
 use std::fmt::Debug;
+use std::cmp::Ordering;
+use std::ops::{AddAssign,Add};
 
-#[derive(Debug,Clone)]
-struct Entry<T: Copy> {
-    v: T,
-    g: usize,
-    delta: usize,
-}
-
-enum Cmp {
-    LT,
-    GT,
-    EQ,
-}
-
-fn cmp<T: PartialOrd + Debug>(l: T, r: T) -> Cmp {
-    if l == r {
-        Cmp::EQ
-    } else if l < r {
-        Cmp::LT
-    } else {
-        Cmp::GT
+impl<T> AddAssign for CKMS<T> where T: Copy + Add<Output=T> + PartialOrd + Debug {
+    fn add_assign(&mut self, rhs: CKMS<T>) {
+        self.last_in = rhs.last_in;
+        self.sum = match (self.sum, rhs.sum) {
+            (None, None) => None,
+            (None, Some(y)) => Some(y),
+            (Some(x), None) => Some(x),
+            (Some(x), Some(y)) => Some(x.add(y))
+        };
+        for smpl in rhs.samples {
+            self.priv_insert(smpl.v);
+        }
     }
 }
 
-/// This is an implementation of the algorithm presented in Cormode, Korn,
-/// Muthukrishnan, Srivastava's paper "Effective Computation of Biased Quantiles
-/// over Data Streams". The ambition here is to approximate quantiles on a
-/// stream of data without having a boatload of information kept in memory.
-///
-/// As of this writing you _must_ use the presentation in the IEEE version of
-/// the paper. The authors' self-published copy of the paper is incorrect and
-/// this implementation will _not_ make sense if you follow along using that
-/// version. Only the 'full biased' invariant is used. The 'targeted quantiles'
-/// variant of this algorithm is fundamentally flawed, an issue which the
-/// authors correct in their "Space- and Time-Efficient Deterministic Algorithms
-/// for Biased Quantiles over Data Streams"
-pub struct CKMS<T: Copy> {
-    n: usize,
-
-    // We follow the 'batch' method of the above paper. In this method,
-    // incoming items are buffered in a priority queue, called 'buffer' here,
-    // and once insert_threshold items are stored in the buffer it is drained
-    // into the 'samples' collection. Insertion will cause some extranious
-    // points to be held that can be merged. Once compress_threshold threshold
-    // items are buffered the COMPRESS operation merges these extranious points.
-    insert_threshold: usize,
-    inserts: usize,
-
-    // We aim for the full biased quantiles method. The paper this
-    // implementation is based on includes a 'targeted' method but the authors
-    // have granted that it is flawed in private communication. As such, all
-    // queries for all quantiles will have the same error factor.
-    error: f64,
-
-    // This is the S(n) of the above paper. Entries are stored here and
-    // occasionally merged. The outlined implementation uses a linked list but
-    // we prefer a Vec for reasons of cache locality at the cost of worse
-    // computational complexity.
-    samples: Vec<Entry<T>>,
-}
-
-impl<T: Copy + PartialOrd + Debug> CKMS<T> {
+impl<T: Copy + PartialOrd + Debug + Add<Output=T>> CKMS<T> {
     /// Create a new CKMS
     ///
     /// A CKMS is meant to answer quantile queries with a known error bound. If
@@ -90,9 +45,9 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T> {
     /// ```
     /// use quantiles::CKMS;
     ///
-    /// let mut ckms = CKMS::<u16>::new(0.001);
+    /// let mut ckms = CKMS::<u64>::new(0.001);
     /// for i in 1..1001 {
-    ///     ckms.insert(i as u16);
+    ///     ckms.insert(i as u64);
     /// }
     /// assert_eq!(ckms.query(0.0), Some((1, 1)));
     /// assert_eq!(ckms.query(0.998), Some((998, 998)));
@@ -104,13 +59,48 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T> {
         CKMS {
             n: 0,
 
-            error: 0.001,
+            error: error,
 
             insert_threshold: insert_threshold as usize,
             inserts: 0,
 
             samples: Vec::<Entry<T>>::new(),
+
+            last_in: None,
+            sum: None,
         }
+    }
+
+    /// Return the last element added to the CKMS
+    ///
+    /// # Example
+    /// ```
+    /// use quantiles::CKMS;
+    ///
+    /// let mut ckms = CKMS::new(0.1);
+    /// ckms.insert(1.0);
+    /// ckms.insert(2.0);
+    /// ckms.insert(3.0);
+    /// assert_eq!(Some(3.0), ckms.last());
+    /// ```
+    pub fn last(&self) -> Option<T> {
+        self.last_in
+    }
+
+    /// Return the sum of the elements added to the CKMS
+    ///
+    /// # Example
+    /// ```
+    /// use quantiles::CKMS;
+    ///
+    /// let mut ckms = CKMS::new(0.1);
+    /// ckms.insert(1.0);
+    /// ckms.insert(2.0);
+    /// ckms.insert(3.0);
+    /// assert_eq!(Some(6.0), ckms.sum());
+    /// ```
+    pub fn sum(&self) -> Option<T> {
+        self.sum
     }
 
     /// Insert a T into the CKMS
@@ -120,6 +110,12 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T> {
     /// may grow gradually, as defined in the module-level documentation, but
     /// will remain bounded.
     pub fn insert(&mut self, v: T) {
+        self.sum = self.sum.map_or(Some(v), |s| Some(s.add(v)));
+        self.last_in = Some(v);
+        self.priv_insert(v);
+    }
+
+    fn priv_insert(&mut self, v: T) {
         let s = self.samples.len();
         let mut r = 0;
         if s == 0 {
@@ -136,9 +132,9 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T> {
         let mut idx = 0;
         for i in 0..s {
             let smpl = &self.samples[i];
-            match cmp(smpl.v, v) {
-                Cmp::LT => idx += 1,
-                Cmp::EQ | Cmp::GT => break,
+            match smpl.v.partial_cmp(&v) {
+                Some(Ordering::Less) => idx += 1,
+                _ => break,
             }
             r += smpl.g;
         }
@@ -173,9 +169,9 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T> {
     /// ```
     /// use quantiles::CKMS;
     ///
-    /// let mut ckms = CKMS::<u16>::new(0.001);
+    /// let mut ckms = CKMS::<u32>::new(0.001);
     /// for i in 0..1000 {
-    ///     ckms.insert(i as u16);
+    ///     ckms.insert(i as u32);
     /// }
     ///
     /// assert_eq!(ckms.query(0.0), Some((1, 0)));
@@ -219,9 +215,9 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T> {
     /// ```
     /// use quantiles::CKMS;
     ///
-    /// let mut ckms = CKMS::<u16>::new(0.001);
+    /// let mut ckms = CKMS::<u32>::new(0.001);
     /// for i in 0..1000 {
-    ///     ckms.insert(i as u16);
+    ///     ckms.insert(i as u32);
     /// }
     ///
     /// assert_eq!(ckms.count(), 1000);
@@ -278,8 +274,10 @@ impl<T: Copy + PartialOrd + Debug> CKMS<T> {
 
 #[cfg(test)]
 mod test {
+    extern crate quickcheck;
+
     use super::*;
-    use quickcheck::{QuickCheck, TestResult};
+    use self::quickcheck::{QuickCheck, TestResult};
     use std::f64::consts::E;
 
     fn percentile(data: &Vec<f64>, prcnt: f64) -> f64 {
@@ -318,6 +316,46 @@ mod test {
     }
 
     #[test]
+    fn error_nominal_with_merge_test() {
+        fn inner(lhs: Vec<f64>, rhs: Vec<f64>, prcnt: f64, err: f64) -> TestResult {
+            if !(prcnt >= 0.0) || !(prcnt <= 1.0) {
+                return TestResult::discard();
+            } else if !(err >= 0.0) || !(err <= 1.0) {
+                return TestResult::discard();
+            } else if (lhs.len() + rhs.len()) < 1 {
+                return TestResult::discard();
+            }
+            let mut data = lhs.clone();
+            data.append(&mut rhs.clone());
+            data.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+            let err = 0.001;
+
+            let mut ckms = CKMS::<f64>::new(err);
+            for d in &lhs {
+                ckms.insert(*d);
+            }
+            let mut ckms_rhs = CKMS::<f64>::new(err);
+            for d in &rhs {
+                ckms_rhs.insert(*d);
+            }
+            ckms += ckms_rhs;
+
+            if let Some((_, v)) = ckms.query(prcnt) {
+                debug_assert!((v - percentile(&data, prcnt)) < err,
+                              "v: {} | percentile: {} | prcnt: {} | data: {:?}", v, percentile(&data, prcnt), prcnt, data);
+                TestResult::passed()
+            } else {
+                TestResult::failed()
+            }
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
+    }
+
+    #[test]
     fn n_invariant_test() {
         fn n_invariant(fs: Vec<i64>) -> bool {
             let l = fs.len();
@@ -333,6 +371,37 @@ mod test {
             .tests(10000)
             .max_tests(100000)
             .quickcheck(n_invariant as fn(Vec<i64>) -> bool);
+    }
+
+    #[test]
+    fn add_assign_test() {
+        fn inner(pair: (i64, i64)) -> bool {
+            let mut lhs = CKMS::<i64>::new(0.001);
+            lhs.insert(pair.0);
+            let mut rhs = CKMS::<i64>::new(0.001);
+            rhs.insert(pair.1);
+
+            let expected: i64 = pair.0 + pair.1;
+            lhs += rhs;
+
+            if let Some(x) = lhs.sum() {
+                if x == expected {
+                    if let Some(y) = lhs.last() {
+                        y == pair.1
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(inner as fn((i64, i64)) -> bool);
     }
 
     // prop: forany phi. (phi*n - f(phi*n, n)/2) =< r_i =< (phi*n + f(phi*n, n)/2)
@@ -450,7 +519,7 @@ mod test {
         let l = ckms.samples.len();
         let n = ckms.count();
         assert_eq!(9999, n);
-        assert_eq!(3332, l);
+        assert_eq!(316, l);
     }
 
     // prop: post-compression, samples is bounded above by O(1/e log^2 en)
