@@ -20,6 +20,7 @@ use std::ops::{AddAssign,Add};
 extern crate quickcheck;
 
 pub mod misra_gries;
+pub mod greenwald_khanna;
 
 impl<T> AddAssign for CKMS<T> where T: Copy + Add<Output=T> + PartialOrd + Debug {
     fn add_assign(&mut self, rhs: CKMS<T>) {
