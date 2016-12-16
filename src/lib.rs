@@ -5,24 +5,25 @@
 //! of memory and computation. Recent literature has advanced approximations but
 //! each have fundamental tradeoffs. This crate is intended to be a collection
 //! of approximate algorithms that provide guarantees around space consumption.
-
 #![deny(missing_docs)]
 #![doc(html_root_url = "https://postmates.github.io/quantiles/")]
 
 include!(concat!(env!("OUT_DIR"), "/ckms_types.rs"));
 
 use std::fmt::Debug;
-use std::cmp::Ordering;
-use std::ops::{AddAssign,Add};
+use std::cmp;
+use std::ops::{AddAssign, Add};
 
-impl<T> AddAssign for CKMS<T> where T: Copy + Add<Output=T> + PartialOrd + Debug {
+impl<T> AddAssign for CKMS<T>
+    where T: Copy + Add<Output = T> + PartialOrd + Debug
+{
     fn add_assign(&mut self, rhs: CKMS<T>) {
         self.last_in = rhs.last_in;
         self.sum = match (self.sum, rhs.sum) {
             (None, None) => None,
             (None, Some(y)) => Some(y),
             (Some(x), None) => Some(x),
-            (Some(x), Some(y)) => Some(x.add(y))
+            (Some(x), Some(y)) => Some(x.add(y)),
         };
         for smpl in rhs.samples {
             self.priv_insert(smpl.v);
@@ -30,7 +31,7 @@ impl<T> AddAssign for CKMS<T> where T: Copy + Add<Output=T> + PartialOrd + Debug
     }
 }
 
-impl<T: Copy + PartialOrd + Debug + Add<Output=T>> CKMS<T> {
+impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
     /// Create a new CKMS
     ///
     /// A CKMS is meant to answer quantile queries with a known error bound. If
@@ -54,8 +55,25 @@ impl<T: Copy + PartialOrd + Debug + Add<Output=T>> CKMS<T> {
     /// assert_eq!(ckms.query(0.999), Some((999, 999)));
     /// assert_eq!(ckms.query(1.0), Some((1000, 1000)));
     /// ```
+    ///
+    /// `error` must but a value between 0 and 1, exclusive of both extremes. If
+    /// you input an error <= 0.0 CKMS will assign an error of
+    /// 0.00000001. Likewise, if your error is >= 1.0 CKMS will assign an error
+    /// of 0.99.
     pub fn new(error: f64) -> CKMS<T> {
+        let error = if error <= 0.0 {
+            0.00000001
+        } else if error >= 1.0 {
+            0.99
+        } else {
+            error
+        };
         let insert_threshold = 1.0 / (2.0 * error);
+        let insert_threshold = if insert_threshold < 1.0 {
+            1.0
+        } else {
+            insert_threshold
+        };
         CKMS {
             n: 0,
 
@@ -133,7 +151,7 @@ impl<T: Copy + PartialOrd + Debug + Add<Output=T>> CKMS<T> {
         for i in 0..s {
             let smpl = &self.samples[i];
             match smpl.v.partial_cmp(&v) {
-                Some(Ordering::Less) => idx += 1,
+                Some(cmp::Ordering::Less) => idx += 1,
                 _ => break,
             }
             r += smpl.g;
@@ -229,11 +247,7 @@ impl<T: Copy + PartialOrd + Debug + Add<Output=T>> CKMS<T> {
     #[inline]
     fn invariant(&self, r: f64) -> usize {
         let i = (2.0 * self.error * r).floor() as usize;
-        if 1 > i {
-            1
-        } else {
-            i
-        }
+        if 1 > i { 1 } else { i }
     }
 
     fn compress(&mut self) {
@@ -303,7 +317,11 @@ mod test {
 
             if let Some((_, v)) = ckms.query(prcnt) {
                 debug_assert!((v - percentile(&data, prcnt)) < err,
-                              "v: {} | percentile: {} | prcnt: {} | data: {:?}", v, percentile(&data, prcnt), prcnt, data);
+                              "v: {} | percentile: {} | prcnt: {} | data: {:?}",
+                              v,
+                              percentile(&data, prcnt),
+                              prcnt,
+                              data);
                 TestResult::passed()
             } else {
                 TestResult::failed()
@@ -343,7 +361,11 @@ mod test {
 
             if let Some((_, v)) = ckms.query(prcnt) {
                 debug_assert!((v - percentile(&data, prcnt)) < err,
-                              "v: {} | percentile: {} | prcnt: {} | data: {:?}", v, percentile(&data, prcnt), prcnt, data);
+                              "v: {} | percentile: {} | prcnt: {} | data: {:?}",
+                              v,
+                              percentile(&data, prcnt),
+                              prcnt,
+                              data);
                 TestResult::passed()
             } else {
                 TestResult::failed()
