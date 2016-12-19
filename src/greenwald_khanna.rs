@@ -15,6 +15,11 @@
 //!  address = {New York, NY, USA},
 //! }
 //!
+//! Greenwald Khanna calculates epsilon-approximate quantiles.
+//! If the desired quantile is phi, the epsilon-approximate
+//! quantile is any element in the range of elements that rank
+//! between `lbound((phi-epsilon) x N)` and `lbound((phi+epsilon) x N)`
+//!
 //! terminology from the paper:
 //! S: set of observations
 //! n: number of observations in S
@@ -25,7 +30,7 @@
 //! g[i] = r_min(v[i]) - r_min(v[i - 1])
 //! delta[i] = r_max(v[i]) - r_min(v[i])
 //! t[i] = tuple(v[i], g[i], delta[i])
-//! phi = quartile as a real number in the range [0,1]
+//! phi = quantile as a real number in the range [0,1]
 //! r = ubound(phi * n)
 //! 
 //! identities:
@@ -37,6 +42,32 @@
 //! results:
 //! max_i(g[i] + delta[i]) <= 2 * epsilon * n
 //! a tuple is full if g[i] + delta[i] = floor(2 * epsilon * n)
+//!
+//! # Examples
+//! 
+//! ```
+//! use quantiles::greenwald_khanna::*;
+//! 
+//! let epsilon = 0.01;
+//! 
+//! let mut stream = Stream::new(epsilon);
+//! 
+//! let n = 1001;
+//! for i in 1..n {
+//!     stream.insert(i);
+//! }
+//! let in_range = |phi: f64, value: u32| {
+//!   let lower = ((phi - epsilon) * (n as f64)) as u32;
+//!   let upper = ((phi + epsilon) * (n as f64)) as u32;
+//!   (epsilon > phi || lower <= value) && value <= upper
+//! };
+//! assert!(in_range(0f64, *stream.quantile(0f64)));
+//! assert!(in_range(0.1f64, *stream.quantile(0.1f64)));
+//! assert!(in_range(0.2f64, *stream.quantile(0.2f64)));
+//! assert!(in_range(0.3f64, *stream.quantile(0.3f64)));
+//! assert!(in_range(0.4f64, *stream.quantile(0.4f64)));
+//! assert!(in_range(1f64, *stream.quantile(1f64)));
+//! ```
 
 use std::cmp;
 
@@ -230,7 +261,7 @@ impl <T> Stream<T> where T: Ord {
     /// Compute which band a delta lies in.
     fn band(delta: usize, p: usize) -> usize {
         assert!(p >= delta);
-        
+
         let diff = p - delta + 1;
 
         (diff as f64).log(2f64).floor() as usize
