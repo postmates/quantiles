@@ -14,8 +14,15 @@ use std::fmt::Debug;
 use std::cmp;
 use std::ops::{AddAssign, Add};
 
-impl<T> AddAssign for CKMS<T>
-    where T: Copy + Add<Output = T> + PartialOrd + Debug
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck;
+
+pub mod misra_gries;
+pub mod greenwald_khanna;
+
+impl<T> AddAssign for CKMS<T> 
+    where T: Copy + Add<Output = T> + PartialOrd + Debug 
 {
     fn add_assign(&mut self, rhs: CKMS<T>) {
         self.last_in = rhs.last_in;
@@ -288,10 +295,8 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
 
 #[cfg(test)]
 mod test {
-    extern crate quickcheck;
-
     use super::*;
-    use self::quickcheck::{QuickCheck, TestResult};
+    use super::quickcheck::{QuickCheck, TestResult};
     use std::f64::consts::E;
 
     fn percentile(data: &Vec<f64>, prcnt: f64) -> f64 {
