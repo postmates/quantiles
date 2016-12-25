@@ -1,57 +1,62 @@
-//! @inproceedings{Greenwald:2001:SOC:375663.375670,
-//!  author = {Greenwald, Michael and Khanna, Sanjeev},
-//!  title = {Space-efficient Online Computation of Quantile Summaries},
-//!  booktitle = {Proceedings of the 2001 ACM SIGMOD International Conference on Management of Data},
-//!  series = {SIGMOD '01},
-//!  year = {2001},
-//!  isbn = {1-58113-332-4},
-//!  location = {Santa Barbara, California, USA},
-//!  pages = {58--66},
-//!  numpages = {9},
-//!  url = {http://doi.acm.org/10.1145/375663.375670},
-//!  doi = {10.1145/375663.375670},
-//!  acmid = {375670},
-//!  publisher = {ACM},
-//!  address = {New York, NY, USA},
-//! }
-//!
 //! Greenwald Khanna calculates epsilon-approximate quantiles.
 //! If the desired quantile is phi, the epsilon-approximate
 //! quantile is any element in the range of elements that rank
 //! between `lbound((phi-epsilon) x N)` and `lbound((phi+epsilon) x N)`
 //!
 //! terminology from the paper:
-//! S: set of observations
-//! n: number of observations in S
-//! v[i]: observation i in S
-//! r: rank of observation in S from 1 to n.
-//! r_min(v[i]): lower bound on rank r of v[i]
-//! r_max(v[i]): upper bound on rank r of v[i]
-//! g[i] = r_min(v[i]) - r_min(v[i - 1])
-//! delta[i] = r_max(v[i]) - r_min(v[i])
-//! t[i] = tuple(v[i], g[i], delta[i])
-//! phi = quantile as a real number in the range [0,1]
-//! r = ubound(phi * n)
-//! 
+//!
+//!   * S: set of observations
+//!   * n: number of observations in S
+//!   * v[i]: observation i in S
+//!   * r: rank of observation in S from 1 to n.
+//!   * `r_min(v[i])`: lower bound on rank r of v[i]
+//!   * `r_max(v[i])`: upper bound on rank r of v[i]
+//!   * `g[i] = r_min(v[i]) - r_min(v[i - 1])`
+//!   * `delta[i] = r_max(v[i]) - r_min(v[i])`
+//!   * `t[i] = tuple(v[i], g[i], delta[i])`
+//!   * phi: quantile as a real number in the range [0,1]
+//!   * r: ubound(phi * n)
+//!
 //! identities:
-//! r_min(v[i]) = forall j<=i sum of g[j]
-//! r_max(v[i]) = ( forall j<=i sum of g[j] ) + delta[i]
-//! g[i] + delta[i] - 1 is an upper bound on the total number of observations between v[i] and v[i-1]
-//! sum of g[i] = n
+//!
+//! * r_min(v[i]) = forall j<=i sum of g[j]
+//! * r_max(v[i]) = ( forall j<=i sum of g[j] ) + delta[i]
+//! * g[i] + delta[i] - 1 is an upper bound on the total number of observations
+//! * between v[i] and v[i-1]
+//! * sum of g[i] = n
 //!
 //! results:
-//! max_i(g[i] + delta[i]) <= 2 * epsilon * n
-//! a tuple is full if g[i] + delta[i] = floor(2 * epsilon * n)
+//!
+//! * max_i(g[i] + delta[i]) <= 2 * epsilon * n
+//! * a tuple is full if g[i] + delta[i] = floor(2 * epsilon * n)
+//!
+//! `@inproceedings{Greenwald:2001:SOC:375663.375670,
+//!       author = {Greenwald, Michael and Khanna, Sanjeev},
+//!       title = {Space-efficient Online Computation of Quantile Summaries},
+//!       booktitle = {Proceedings of the 2001 ACM SIGMOD International Conference
+//!                    on Management of Data},
+//!       series = {SIGMOD '01},
+//!       year = {2001},
+//!       isbn = {1-58113-332-4},
+//!       location = {Santa Barbara, California, USA},
+//!       pages = {58--66},
+//!       numpages = {9},
+//!       url = {http://doi.acm.org/10.1145/375663.375670},
+//!       doi = {10.1145/375663.375670},
+//!       acmid = {375670},
+//!       publisher = {ACM},
+//!       address = {New York, NY, USA},
+//!     }`
 //!
 //! # Examples
-//! 
+//!
 //! ```
 //! use quantiles::greenwald_khanna::*;
-//! 
+//!
 //! let epsilon = 0.01;
-//! 
+//!
 //! let mut stream = Stream::new(epsilon);
-//! 
+//!
 //! let n = 1001;
 //! for i in 1..n {
 //!     stream.insert(i);
@@ -75,13 +80,15 @@ use std::cmp;
 /// such that when v is inserted at position i,
 /// it is less then the element at i+1 if any,
 /// and greater than or equal to the element at i-1 if any.
-pub fn find_insert_pos<T>(vs: &[T], v: &T) -> usize where T: Ord {
+pub fn find_insert_pos<T>(vs: &[T], v: &T) -> usize
+    where T: Ord
+{
     if vs.len() <= 10 {
         return find_insert_pos_linear(vs, v);
     }
 
     let middle = vs.len() / 2;
-    let pivot = vs.get(middle).unwrap();
+    let pivot = &vs[middle];
 
     if v < pivot {
         find_insert_pos(&vs[0..middle], v)
@@ -95,7 +102,9 @@ pub fn find_insert_pos<T>(vs: &[T], v: &T) -> usize where T: Ord {
 /// it is less then the element at i+1 if any,
 /// and greater than or equal to the element at i-1 if any.
 /// Works by scanning the slice from start to end.
-pub fn find_insert_pos_linear<T>(vs: &[T], v: &T) -> usize where T: Ord {
+pub fn find_insert_pos_linear<T>(vs: &[T], v: &T) -> usize
+    where T: Ord
+{
     for (i, vi) in vs.iter().enumerate() {
         if v < vi {
             return i;
@@ -106,8 +115,10 @@ pub fn find_insert_pos_linear<T>(vs: &[T], v: &T) -> usize where T: Ord {
 }
 
 /// 3-tuple of a value v[i], g[i] and delta[i].
-#[derive(Eq, Ord)]
-pub struct Tuple<T> where T: Ord {
+#[derive(Eq, Ord, Debug)]
+pub struct Tuple<T>
+    where T: Ord
+{
     /// v[i], an observation in the set of observations
     pub v: T,
 
@@ -119,7 +130,9 @@ pub struct Tuple<T> where T: Ord {
     pub delta: usize,
 }
 
-impl <T> Tuple<T> where T: Ord {
+impl<T> Tuple<T>
+    where T: Ord
+{
     /// Creates a new instance of a Tuple
     pub fn new(v: T, g: usize, delta: usize) -> Tuple<T> {
         Tuple {
@@ -130,21 +143,27 @@ impl <T> Tuple<T> where T: Ord {
     }
 }
 
-impl <T> PartialEq for Tuple<T> where T: Ord {
+impl<T> PartialEq for Tuple<T>
+    where T: Ord
+{
     fn eq(&self, other: &Self) -> bool {
         self.v == other.v
     }
 }
 
-impl <T> PartialOrd for Tuple<T> where T: Ord {
+impl<T> PartialOrd for Tuple<T>
+    where T: Ord
+{
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         self.v.partial_cmp(&other.v)
     }
 }
 
 /// The summary S of the observations seen so far.
-pub struct Stream<T> where T: Ord {
-
+#[derive(Debug)]
+pub struct Stream<T>
+    where T: Ord
+{
     /// An ordered sequence of the selected observations
     summary: Vec<Tuple<T>>,
 
@@ -155,7 +174,9 @@ pub struct Stream<T> where T: Ord {
     n: usize,
 }
 
-impl <T> Stream<T> where T: Ord {
+impl<T> Stream<T>
+    where T: Ord
+{
     /// Creates a new instance of a Stream
     pub fn new(epsilon: f64) -> Stream<T> {
         Stream {
@@ -176,7 +197,7 @@ impl <T> Stream<T> where T: Ord {
 
         if pos != 0 && pos != self.summary.len() {
             t.delta = (2f64 * self.epsilon * (self.n as f64).floor()) as usize;
-        } 
+        }
 
         self.summary.insert(pos, t);
 
@@ -189,14 +210,14 @@ impl <T> Stream<T> where T: Ord {
 
     /// Compute the epsilon-approximate phi-quantile
     /// from the summary data structure.
-    pub fn quantile<'a>(&'a self, phi: f64) -> &'a T {
+    pub fn quantile(&self, phi: f64) -> &T {
         assert!(self.summary.len() >= 1);
         assert!(phi >= 0f64 && phi <= 1f64);
 
         let r = (phi * self.n as f64).floor() as usize;
         let en = (self.epsilon * self.n as f64) as usize;
 
-        let first = self.summary.get(0).unwrap();
+        let first = &self.summary[0];
 
         let mut prev = &first.v;
         let mut prev_rmin = first.g;
@@ -223,7 +244,7 @@ impl <T> Stream<T> where T: Ord {
 
     fn compress(&mut self) {
         let s = self.s();
-        for i in (1..(s-1)).rev() {
+        for i in (1..(s - 1)).rev() {
             if self.can_delete(i) {
                 self.delete(i);
             }
@@ -234,14 +255,14 @@ impl <T> Stream<T> where T: Ord {
         assert!(self.summary.len() >= 2);
         assert!(i < self.summary.len() - 1);
 
-        let t = self.summary.get(i).unwrap();
-        let tnext = self.summary.get(i + 1).unwrap();
+        let t = &self.summary[i];
+        let tnext = &self.summary[i+1];
         let p = self.p();
 
         let safety_property = t.g + tnext.g + tnext.delta < p;
 
         let optimal = Self::band(t.delta, p) <= Self::band(tnext.delta, p);
-        
+
         safety_property && optimal
     }
 
@@ -253,7 +274,7 @@ impl <T> Stream<T> where T: Ord {
         assert!(i < self.summary.len() - 1);
 
         let t = self.summary.remove(i);
-        let mut tnext = self.summary.get_mut(i).unwrap();
+        let mut tnext = &mut self.summary[i];
 
         tnext.g += t.g;
     }
@@ -317,7 +338,8 @@ mod test {
         let approx_quantile = *s.quantile(phi);
         let (lower, upper) = get_quantile_bounds_for_range(r, phi, epsilon);
 
-        //println!("approx_quantile={} lower={} upper={} phi={} epsilon={}", approx_quantile, lower, upper, phi, epsilon);
+        // println!("approx_quantile={} lower={} upper={} phi={} epsilon={}",
+        // approx_quantile, lower, upper, phi, epsilon);
 
         approx_quantile >= lower && approx_quantile <= upper
     }
@@ -333,7 +355,7 @@ mod test {
         }
 
         for phi in 0..100 {
-            assert!(quantile_in_bounds(1..1001, &stream, (phi as f64)/100f64, epsilon));
+            assert!(quantile_in_bounds(1..1001, &stream, (phi as f64) / 100f64, epsilon));
         }
     }
 
@@ -362,6 +384,3 @@ mod test {
         }
     }
 }
-
-
-

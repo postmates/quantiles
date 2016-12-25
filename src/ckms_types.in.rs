@@ -5,18 +5,8 @@ struct Entry<T: Copy> {
     delta: usize,
 }
 
-/// This is an implementation of the algorithm presented in Cormode, Korn,
-/// Muthukrishnan, Srivastava's paper "Effective Computation of Biased Quantiles
-/// over Data Streams". The ambition here is to approximate quantiles on a
-/// stream of data without having a boatload of information kept in memory.
-///
-/// As of this writing you _must_ use the presentation in the IEEE version of
-/// the paper. The authors' self-published copy of the paper is incorrect and
-/// this implementation will _not_ make sense if you follow along using that
-/// version. Only the 'full biased' invariant is used. The 'targeted quantiles'
-/// variant of this algorithm is fundamentally flawed, an issue which the
-/// authors correct in their "Space- and Time-Efficient Deterministic Algorithms
-/// for Biased Quantiles over Data Streams"
+/// A structure to provide approximate quantiles queries in bounded memory and
+/// with bounded error.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct CKMS<T: Copy> {
     n: usize,

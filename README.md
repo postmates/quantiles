@@ -124,3 +124,17 @@ assert!(in_range(0.3f64, *stream.quantile(0.3f64)));
 assert!(in_range(0.4f64, *stream.quantile(0.4f64)));
 assert!(in_range(1f64, *stream.quantile(1f64)));
 ```
+
+## Upgrading 
+
+### 0.2 -> 0.3
+
+This release introduces two new algorithms, "Greenwald Khanna" and "Misra
+Gries". The existing CKMS has been moved from root to its own submodule. You'll
+need to update your imports from
+
+    use quantiles::CMKS;
+    
+to 
+
+    use quantiles::ckms::CKMS;

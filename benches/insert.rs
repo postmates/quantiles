@@ -3,9 +3,8 @@
 extern crate test;
 extern crate quantiles;
 
+use quantiles::ckms::CKMS;
 use self::test::Bencher;
-
-use quantiles::CKMS;
 
 #[bench]
 fn bench_sequential_insert(b: &mut Bencher) {

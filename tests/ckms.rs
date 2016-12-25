@@ -2,11 +2,11 @@ mod integration {
     mod ckms {
         extern crate quantiles;
 
+        use self::quantiles::ckms::CKMS;
         use std::fs::File;
         use std::io::Read;
         use std::path::PathBuf;
         use std::str::FromStr;
-        use self::quantiles::CKMS;
 
         #[test]
         fn test_run_afl_examples() {

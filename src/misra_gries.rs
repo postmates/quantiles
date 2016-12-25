@@ -1,5 +1,20 @@
-//! J. Misra and D. Gries.
-//! @article{MISRA1982143,
+//! Misra-Gries calculates an ε-approximate frequency count for a stream of N
+//! elements. The output is the k most frequent elements.
+//!
+//! 1. the approximate count f'[e] is smaller than the true frequency f[e] of e,
+//!    but by at most εN, i.e., (f[e] - εN) ≤ f'[e] ≤ f[e]
+//! 2. any element e with a frequency f[e] ≥ εN appears in the result set
+//!
+//! The error bound ε = 1/(k+1) where k is the number of counters used in the
+//! algorithm.
+//! When k = 1 i.e. a single counter, the algorithm is equivalent to the
+//! Boyer-Moore Majority algorithm.
+//!
+//! If you want to check for elements that appear at least εN times, you will
+//! want to perform a second pass to calculate the exact frequencies of the
+//! values in the result set which can be done in constant space.
+//!
+//! `@article{MISRA1982143,
 //! title = "Finding repeated elements",
 //! journal = "Science of Computer Programming",
 //! volume = "2",
@@ -10,25 +25,10 @@
 //! doi = "http://dx.doi.org/10.1016/0167-6423(82)90012-0",
 //! url = "http://www.sciencedirect.com/science/article/pii/0167642382900120",
 //! author = "J. Misra and David Gries",
-//! }
-//!
-//! Misra-Gries calculates an ε-approximate frequency count for a stream of N elements.
-//! The output is the k most frequent elements.
-//! 
-//! 1. the approximate count f'[e] is smaller than the true frequency f[e] of e, 
-//!    but by at most εN, i.e., (f[e] - εN) ≤ f'[e] ≤ f[e]
-//! 2. any element e with a frequency f[e] ≥ εN appears in the result set
-//! 
-//! The error bound ε = 1/(k+1) where k is the number of counters used in the algorithm.
-//! When k = 1 i.e. a single counter, the algorithm is equivalent to the
-//! Boyer-Moore Majority algorithm.
-//!
-//! If you want to check for elements that appear at least εN times, you will want
-//! to perform a second pass to calculate the exact frequencies of the values in the
-//! result set which can be done in constant space.
+//! }`
 //!
 //! # Examples
-//! 
+//!
 //! ```
 //! use quantiles::misra_gries::*;
 //!
@@ -49,8 +49,12 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
 /// Calculates the `k` most frequent elements in the iterable
-/// stream of elements `stream` using an ε-approximate frequency count where ε = 1/(k+1)
-pub fn misra_gries<I,V>(stream: I, k: usize) -> BTreeMap<V,usize> where I: IntoIterator<Item=V>, V: Ord + Clone {
+/// stream of elements `stream` using an ε-approximate frequency count where ε
+/// = 1/(k+1)
+pub fn misra_gries<I, V>(stream: I, k: usize) -> BTreeMap<V, usize>
+    where I: IntoIterator<Item = V>,
+          V: Ord + Clone
+{
     let mut counters = BTreeMap::new();
     for i in stream {
         let counters_len = counters.len();
@@ -59,8 +63,8 @@ pub fn misra_gries<I,V>(stream: I, k: usize) -> BTreeMap<V,usize> where I: IntoI
         match counters.entry(i.clone()) {
             Entry::Occupied(mut item) => {
                 *item.get_mut() += 1;
-                counted = true;       
-            },
+                counted = true;
+            }
             Entry::Vacant(slot) => {
                 if counters_len < k {
                     slot.insert(1);
@@ -70,7 +74,7 @@ pub fn misra_gries<I,V>(stream: I, k: usize) -> BTreeMap<V,usize> where I: IntoI
         }
 
         if !counted {
-            for (_i, c) in counters.iter_mut() {
+            for (_i, c) in &mut counters {
                 *c -= 1;
             }
 
@@ -85,11 +89,14 @@ pub fn misra_gries<I,V>(stream: I, k: usize) -> BTreeMap<V,usize> where I: IntoI
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::collections::BTreeMap;
+    use super::*;
 
     /// Calculate exact element frequencies using O(n) space.
-    pub fn exact_frequencies<I,V>(stream: I) -> BTreeMap<V,usize> where I: IntoIterator<Item=V>, V: Ord + Clone {
+    pub fn exact_frequencies<I, V>(stream: I) -> BTreeMap<V, usize>
+        where I: IntoIterator<Item = V>,
+              V: Ord + Clone
+    {
         let mut counts = BTreeMap::new();
         for i in stream {
             *counts.entry(i.clone()).or_insert(0) += 1;
@@ -99,7 +106,7 @@ mod test {
 
     #[test]
     fn test_exact_frequencies() {
-        let numbers = vec![1,2,1,3,3,1,2,4];
+        let numbers = vec![1, 2, 1, 3, 3, 1, 2, 4];
         let counts = exact_frequencies(numbers.iter());
         assert_eq!(*counts.get(&1).unwrap() as u32, 3);
         assert_eq!(*counts.get(&2).unwrap() as u32, 2);
