@@ -59,29 +59,29 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
     /// ```
     ///
     /// `error` must but a value between 0 and 1, exclusive of both extremes. If
-    /// you input an error <= 0.0 CKMS will assign an error of
-    /// 0.00000001. Likewise, if your error is >= 1.0 CKMS will assign an error
-    /// of 0.99.
+    /// you input an error <= 0.000_000_000_1 CKMS will assign an error of
+    /// 0.000_000_000_1. Likewise, if your error is >= 1.0 CKMS will assign an
+    /// error of 0.99.
     pub fn new(error: f64) -> CKMS<T> {
-        let error = if error <= 0.0 {
-            0.00000001
+        let error = if error <= 0.000_000_000_1 {
+            0.000_000_000_1
         } else if error >= 1.0 {
             0.99
         } else {
             error
         };
         let insert_threshold = 1.0 / (2.0 * error);
-        let insert_threshold = if insert_threshold < 1.0 {
-            1.0
+        let insert_threshold: usize = if insert_threshold < 1.0 {
+            1
         } else {
-            insert_threshold
+            insert_threshold as usize
         };
         CKMS {
             n: 0,
 
             error: error,
 
-            insert_threshold: insert_threshold as usize,
+            insert_threshold: insert_threshold,
             inserts: 0,
 
             samples: Vec::<Entry<T>>::new(),
