@@ -27,7 +27,7 @@ variant of this algorithm is fundamentally flawed, an issue which the authors
 correct in their "Space- and Time-Efficient Deterministic Algorithms for Biased
 Quantiles over Data Streams"
 
-```
+```rust
 use quantiles::CKMS;
 
 let mut ckms = CKMS::<u16>::new(0.001);
@@ -57,10 +57,10 @@ variance of 7%. This comes to 250k points per second.
 Misra-Gries calculates an ε-approximate frequency count for a stream of N elements.
 The output is the k most frequent elements.
 
-1. the approximate count f'[e] is smaller than the true frequency f[e] of e, 
+1. the approximate count f'[e] is smaller than the true frequency f[e] of e,
    but by at most εN, i.e., (f[e] - εN) ≤ f'[e] ≤ f[e]
 2. any element e with a frequency f[e] ≥ εN appears in the result set
-   
+
 The error bound ε = 1/(k+1) where k is the number of counters used in the algorithm.
 When k = 1 i.e. a single counter, the algorithm is equivalent to the
 Boyer-Moore Majority algorithm.
@@ -69,7 +69,7 @@ If you want to check for elements that appear at least εN times, you will want
 to perform a second pass to calculate the exact frequencies of the values in the
 result set which can be done in constant space.
 
-```
+```rust
 use quantiles::misra_gries::*;
 
 let k: usize = 3;
@@ -101,7 +101,7 @@ and maximum observed elements respectively.
 This page explains the theory:
 [http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Greenwald.html](http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Greenwald.html)
 
-```
+```rust
 use quantiles::greenwald_khanna::*;
 
 let epsilon = 0.01;
@@ -125,7 +125,7 @@ assert!(in_range(0.4f64, *stream.quantile(0.4f64)));
 assert!(in_range(1f64, *stream.quantile(1f64)));
 ```
 
-## Upgrading 
+## Upgrading
 
 ### 0.2 -> 0.3
 
@@ -133,8 +133,12 @@ This release introduces two new algorithms, "Greenwald Khanna" and "Misra
 Gries". The existing CKMS has been moved from root to its own submodule. You'll
 need to update your imports from
 
-    use quantiles::CMKS;
-    
-to 
+```rust
+use quantiles::CMKS;
+```
 
-    use quantiles::ckms::CKMS;
+to
+
+```rust
+use quantiles::ckms::CKMS;
+```
