@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `CKMS` struct in crate `quantiles`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, CKMS">
+
+    <title>quantiles::ckms::CKMS - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='../index.html'>quantiles</a>::<wbr><a href='index.html'>ckms</a></p><script>window.sidebarCurrent = {name: 'CKMS', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>quantiles</a>::<wbr><a href='index.html'>ckms</a>::<wbr><a class='struct' href=''>CKMS</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a class='srclink' href='../../src/quantiles/home/travis/build/postmates/quantiles/target/debug/build/quantiles-dff74986c6c43c1f/out/ckms_types.rs.html#561-569' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct CKMS&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a>&gt; { /* fields omitted */ }</pre><div class='docblock'><p>A structure to provide approximate quantiles queries in bounded memory and
+with bounded error.</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialOrd.html' title='core::cmp::PartialOrd'>PartialOrd</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/core/ops/trait.Add.html' title='core::ops::Add'>Add</a>&lt;Output=T&gt;&gt; <a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a class='srclink' href='../../src/quantiles/ckms.rs.html#36-309' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.new' class='method'><span id='new.v' class='invisible'><code>fn <a href='#method.new' class='fnname'>new</a>(error: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.f64.html'>f64</a>) -&gt; <a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Create a new CKMS</p>
+
+<p>A CKMS is meant to answer quantile queries with a known error bound. If
+the error passed here is ε and there have been <code>n</code> items inserted into
+CKMS then for any quantile query Φ the deviance from the true quantile
+will be +/- εΦn.</p>
+
+<p>For an error ε this structure will require T*(floor(1/(2*ε)) + O(1/ε log
+εn)) + f64 + usize + usize words of storage.</p>
+
+<h1 id='examples' class='section-header'><a href='#examples'>Examples</a></h1>
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>quantiles</span>::<span class='ident'>ckms</span>::<span class='ident'>CKMS</span>;
+
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ckms</span> <span class='op'>=</span> <span class='ident'>CKMS</span>::<span class='op'>&lt;</span><span class='ident'>u64</span><span class='op'>&gt;</span>::<span class='ident'>new</span>(<span class='number'>0.001</span>);
+<span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>1</span>..<span class='number'>1001</span> {
+    <span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='ident'>i</span> <span class='kw'>as</span> <span class='ident'>u64</span>);
+}
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>query</span>(<span class='number'>0.0</span>), <span class='prelude-val'>Some</span>((<span class='number'>1</span>, <span class='number'>1</span>)));
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>query</span>(<span class='number'>0.998</span>), <span class='prelude-val'>Some</span>((<span class='number'>998</span>, <span class='number'>998</span>)));
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>query</span>(<span class='number'>0.999</span>), <span class='prelude-val'>Some</span>((<span class='number'>999</span>, <span class='number'>999</span>)));
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>query</span>(<span class='number'>1.0</span>), <span class='prelude-val'>Some</span>((<span class='number'>1000</span>, <span class='number'>1000</span>)));</pre>
+
+<p><code>error</code> must but a value between 0 and 1, exclusive of both extremes. If
+you input an error &lt;= 0.000_000_000_1 CKMS will assign an error of
+0.000_000_000_1. Likewise, if your error is &gt;= 1.0 CKMS will assign an
+error of 0.99.</p>
+</div><h4 id='method.last' class='method'><span id='last.v' class='invisible'><code>fn <a href='#method.last' class='fnname'>last</a>(&amp;self) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Return the last element added to the CKMS</p>
+
+<h1 id='example' class='section-header'><a href='#example'>Example</a></h1>
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>quantiles</span>::<span class='ident'>ckms</span>::<span class='ident'>CKMS</span>;
+
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ckms</span> <span class='op'>=</span> <span class='ident'>CKMS</span>::<span class='ident'>new</span>(<span class='number'>0.1</span>);
+<span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='number'>1.0</span>);
+<span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='number'>2.0</span>);
+<span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='number'>3.0</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='prelude-val'>Some</span>(<span class='number'>3.0</span>), <span class='ident'>ckms</span>.<span class='ident'>last</span>());</pre>
+</div><h4 id='method.sum' class='method'><span id='sum.v' class='invisible'><code>fn <a href='#method.sum' class='fnname'>sum</a>(&amp;self) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Return the sum of the elements added to the CKMS</p>
+
+<h1 id='example-1' class='section-header'><a href='#example-1'>Example</a></h1>
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>quantiles</span>::<span class='ident'>ckms</span>::<span class='ident'>CKMS</span>;
+
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ckms</span> <span class='op'>=</span> <span class='ident'>CKMS</span>::<span class='ident'>new</span>(<span class='number'>0.1</span>);
+<span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='number'>1.0</span>);
+<span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='number'>2.0</span>);
+<span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='number'>3.0</span>);
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='prelude-val'>Some</span>(<span class='number'>6.0</span>), <span class='ident'>ckms</span>.<span class='ident'>sum</span>());</pre>
+</div><h4 id='method.insert' class='method'><span id='insert.v' class='invisible'><code>fn <a href='#method.insert' class='fnname'>insert</a>(&amp;mut self, v: T)</code></span></h4>
+<div class='docblock'><p>Insert a T into the CKMS</p>
+
+<p>Insertion will gradulally shift the approximate quantiles. This
+implementation is biased toward fast writes and slower queries. Storage
+may grow gradually, as defined in the module-level documentation, but
+will remain bounded.</p>
+</div><h4 id='method.query' class='method'><span id='query.v' class='invisible'><code>fn <a href='#method.query' class='fnname'>query</a>(&amp;self, q: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.f64.html'>f64</a>) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, T<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>)</a>&gt;</code></span></h4>
+<div class='docblock'><p>Query CKMS for a ε-approximate quantile</p>
+
+<p>This function returns an approximation to the true quantile-- +/- εΦn
+--for the points inserted. Argument q is valid 0. &lt;= q &lt;= 1.0. The
+minimum and maximum quantile, corresponding to 0.0 and 1.0 respectively,
+are always known precisely.</p>
+
+<p>Return</p>
+
+<h1 id='examples-1' class='section-header'><a href='#examples-1'>Examples</a></h1>
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>quantiles</span>::<span class='ident'>ckms</span>::<span class='ident'>CKMS</span>;
+
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ckms</span> <span class='op'>=</span> <span class='ident'>CKMS</span>::<span class='op'>&lt;</span><span class='ident'>u32</span><span class='op'>&gt;</span>::<span class='ident'>new</span>(<span class='number'>0.001</span>);
+<span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>0</span>..<span class='number'>1000</span> {
+    <span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='ident'>i</span> <span class='kw'>as</span> <span class='ident'>u32</span>);
+}
+
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>query</span>(<span class='number'>0.0</span>), <span class='prelude-val'>Some</span>((<span class='number'>1</span>, <span class='number'>0</span>)));
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>query</span>(<span class='number'>0.998</span>), <span class='prelude-val'>Some</span>((<span class='number'>998</span>, <span class='number'>997</span>)));
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>query</span>(<span class='number'>1.0</span>), <span class='prelude-val'>Some</span>((<span class='number'>1000</span>, <span class='number'>999</span>)));</pre>
+</div><h4 id='method.count' class='method'><span id='count.v' class='invisible'><code>fn <a href='#method.count' class='fnname'>count</a>(&amp;self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a></code></span></h4>
+<div class='docblock'><p>Query CKMS for the count of its points</p>
+
+<p>This function returns the total number of points seen over the lifetime
+of the datastructure, <em>not</em> the number of points currently stored in the
+structure.</p>
+
+<h1 id='examples-2' class='section-header'><a href='#examples-2'>Examples</a></h1>
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>quantiles</span>::<span class='ident'>ckms</span>::<span class='ident'>CKMS</span>;
+
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ckms</span> <span class='op'>=</span> <span class='ident'>CKMS</span>::<span class='op'>&lt;</span><span class='ident'>u32</span><span class='op'>&gt;</span>::<span class='ident'>new</span>(<span class='number'>0.001</span>);
+<span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>0</span>..<span class='number'>1000</span> {
+    <span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='ident'>i</span> <span class='kw'>as</span> <span class='ident'>u32</span>);
+}
+
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>count</span>(), <span class='number'>1000</span>);</pre>
+</div><h4 id='method.into_vec' class='method'><span id='into_vec.v' class='invisible'><code>fn <a href='#method.into_vec' class='fnname'>into_vec</a>(self) -&gt; <a class='struct' href='https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Retrieve a representative vector of points</p>
+
+<p>This function returns a represenative sample of points from the
+CKMS. Doing so consumes the CKMS.</p>
+
+<h1 id='examples-3' class='section-header'><a href='#examples-3'>Examples</a></h1>
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>quantiles</span>::<span class='ident'>ckms</span>::<span class='ident'>CKMS</span>;
+
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>ckms</span> <span class='op'>=</span> <span class='ident'>CKMS</span>::<span class='op'>&lt;</span><span class='ident'>u32</span><span class='op'>&gt;</span>::<span class='ident'>new</span>(<span class='number'>0.1</span>);
+<span class='kw'>for</span> <span class='ident'>i</span> <span class='kw'>in</span> <span class='number'>0</span>..<span class='number'>10</span> {
+    <span class='ident'>ckms</span>.<span class='ident'>insert</span>(<span class='ident'>i</span> <span class='kw'>as</span> <span class='ident'>u32</span>);
+}
+
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>ckms</span>.<span class='ident'>into_vec</span>(), <span class='macro'>vec</span><span class='macro'>!</span>[<span class='number'>0</span>, <span class='number'>1</span>, <span class='number'>2</span>, <span class='number'>3</span>, <span class='number'>4</span>, <span class='number'>5</span>, <span class='number'>6</span>, <span class='number'>7</span>, <span class='number'>8</span>, <span class='number'>9</span>]);</pre>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><span class='in-band'><code>impl&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a>&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a> for <a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a class='srclink' href='../../src/quantiles/home/travis/build/postmates/quantiles/target/debug/build/quantiles-dff74986c6c43c1f/out/ckms_types.rs.html#560' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.fmt' class='method'><span id='fmt.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html#tymethod.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='https://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='https://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></span></h4>
+<div class='docblock'><p>Formats the value using the given formatter.</p>
+</div></div><h3 class='impl'><span class='in-band'><code>impl&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html' title='core::cmp::PartialEq'>PartialEq</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a>&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html' title='core::cmp::PartialEq'>PartialEq</a> for <a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a class='srclink' href='../../src/quantiles/home/travis/build/postmates/quantiles/target/debug/build/quantiles-dff74986c6c43c1f/out/ckms_types.rs.html#560' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.eq' class='method'><span id='eq.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html#tymethod.eq' class='fnname'>eq</a>(&amp;self, __arg_0: &amp;<a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></span></h4>
+<div class='docblock'><p>This method tests for <code>self</code> and <code>other</code> values to be equal, and is used by <code>==</code>. <a href="https://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html#tymethod.eq">Read more</a></p>
+</div><h4 id='method.ne' class='method'><span id='ne.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html#method.ne' class='fnname'>ne</a>(&amp;self, __arg_0: &amp;<a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></span></h4>
+<div class='docblock'><p>This method tests for <code>!=</code>.</p>
+</div></div><h3 class='impl'><span class='in-band'><code>impl&lt;T:&nbsp;<a class='trait' href='https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a>&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html' title='core::clone::Clone'>Clone</a> for <a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;</code></span><span class='out-of-band'><div class='ghost'></div><a class='srclink' href='../../src/quantiles/home/travis/build/postmates/quantiles/target/debug/build/quantiles-dff74986c6c43c1f/out/ckms_types.rs.html#560' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.clone' class='method'><span id='clone.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#tymethod.clone' class='fnname'>clone</a>(&amp;self) -&gt; <a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;</code></span></h4>
+<div class='docblock'><p>Returns a copy of the value. <a href="https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#tymethod.clone">Read more</a></p>
+</div><h4 id='method.clone_from' class='method'><span id='clone_from.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from' class='fnname'>clone_from</a>(&amp;mut self, source: &amp;Self)</code><div class='since' title='Stable since Rust version 1.0.0'>1.0.0</div></span></h4>
+<div class='docblock'><p>Performs copy-assignment from <code>source</code>. <a href="https://doc.rust-lang.org/nightly/core/clone/trait.Clone.html#method.clone_from">Read more</a></p>
+</div></div><h3 class='impl'><span class='in-band'><code>impl&lt;T&gt; <a class='trait' href='https://doc.rust-lang.org/nightly/core/ops/trait.AddAssign.html' title='core::ops::AddAssign'>AddAssign</a> for <a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt; <span class='where'>where T: <a class='trait' href='https://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/core/ops/trait.Add.html' title='core::ops::Add'>Add</a>&lt;Output=T&gt; + <a class='trait' href='https://doc.rust-lang.org/nightly/core/cmp/trait.PartialOrd.html' title='core::cmp::PartialOrd'>PartialOrd</a> + <a class='trait' href='https://doc.rust-lang.org/nightly/core/fmt/trait.Debug.html' title='core::fmt::Debug'>Debug</a></span></code></span><span class='out-of-band'><div class='ghost'></div><a class='srclink' href='../../src/quantiles/ckms.rs.html#19-34' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.add_assign' class='method'><span id='add_assign.v' class='invisible'><code>fn <a href='https://doc.rust-lang.org/nightly/core/ops/trait.AddAssign.html#tymethod.add_assign' class='fnname'>add_assign</a>(&amp;mut self, rhs: <a class='struct' href='../../quantiles/ckms/struct.CKMS.html' title='quantiles::ckms::CKMS'>CKMS</a>&lt;T&gt;)</code></span></h4>
+<div class='docblock'><p>The method for the <code>+=</code> operator</p>
+</div></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "quantiles";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    <script defer src="../../search-index.js"></script>
+</body>
+</html>

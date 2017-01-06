@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["CKMS","A structure to provide approximate quantiles queries in bounded memory and with bounded error."]]});
