@@ -14,12 +14,15 @@ keywords = ["statistics", "histogram", "quantiles", "percentiles", "approximatio
 
 [profile.release]
 lto = true
+debug = true
 
 [dev-dependencies]
 quickcheck = "0.3"
 
 [dependencies]
 serde = "0.8"
+afl = "0.1"
+afl-plugin = "0.1"
 
 [build-dependencies]
 serde_codegen = "0.8"

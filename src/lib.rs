@@ -7,8 +7,6 @@
 //! of approximate algorithms that provide guarantees around space consumption.
 #![deny(missing_docs,
         missing_debug_implementations, missing_copy_implementations,
-        unsafe_code,
-        unstable_features,
         unused_import_braces, unused_qualifications)]
 #![doc(html_root_url = "https://postmates.github.io/quantiles/")]
 
