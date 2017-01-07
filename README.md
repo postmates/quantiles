@@ -1,5 +1,7 @@
 # quantiles
 
+[![Build Status](https://travis-ci.org/postmates/quantiles.svg?branch=master)](https://travis-ci.org/postmates/quantiles) [![Codecov](https://img.shields.io/codecov/c/github/postmates/quantiles.svg)](https://codecov.io/gh/postmates/quantiles) [![Crates.io](https://img.shields.io/crates/v/quantiles.svg)](https://crates.io/crates/quantiles)
+
 This crate is intended to be a collection of approxiate quantile algorithms that
 provide guarantees around space and computation. Recent literature has advanced
 approximation techniques but none are generally applicable and have fundamental
@@ -7,8 +9,6 @@ tradeoffs.
 
 Initial work was done to support internal Postmates projects but the hope is
 that the crate can be generally useful.
-
-[![Build Status](https://travis-ci.org/postmates/quantiles.svg?branch=master)](https://travis-ci.org/postmates/quantiles)
 
 ## The Algorithms
 
