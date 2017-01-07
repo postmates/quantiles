@@ -3,17 +3,35 @@ rust:
 - stable
 - beta
 - nightly
+
 matrix:
   allow_failures:
   - rust: nightly
+
+before_install:
+  - sudo apt-get update
+
+addons:
+  apt:
+    packages:
+      - libcurl4-openssl-dev
+      - libelf-dev
+      - libdw-dev
+      - cmake
+      - gcc
+      - binutils-dev
+
 after_success: |
-  [ $TRAVIS_BRANCH = master ] &&
-  [ $TRAVIS_PULL_REQUEST = false ] &&
-  cargo doc &&
-  echo "<meta http-equiv=refresh content=0;url=`echo $TRAVIS_REPO_SLUG | cut -d '/' -f 2`/index.html>" > target/doc/index.html &&
-  sudo pip install ghp-import &&
-  ghp-import -n target/doc &&
-  git push -fq https://${GH_TOKEN}@github.com/${TRAVIS_REPO_SLUG}.git gh-pages
-env:
-  global:
-    secure: E9UDGQrNE5GuhvH6J9X2LnnIahCp1KlTvGOgpL7/gEF2u/thGD2PiiEvxNUDP78t8fsv4ymfA3EV8diRN66a/bySE77NkQTFzA2Xxz7khqO+3u1L0md+KdCiTg85PH2SBONTIa2HTBhZe0B1lIvBWRuFWylRbPjvDzIvbL1ND2cnS7vgqvfFBljlzN88QMFDlQe/efPZkxHdZ7Pc0ewFkE5SUPyT9vdqji16LId+0goa2+8j3mZlGgTXs7dzopVUplL46ScAo3a0n8xnVzl2tHGyg9MmpHvVmCO+qAMjnBYSA1HW9+uE9wBATvgn3n9FI191J5Wmd9fna67dQr/tvieTFieQxaMW2huI1RwQh+3RQ5mTPf1cRb6ny5gFRKoc8fLkmcUe1zLmlAH6YXvJ0s9FsuX/UGCGBvGfUxz3WDg85GGrutLnhALHuwe4/rlF6lEFUixyF8TyNhvug5iSewQrKe/MgBZZcOTqmWZYHUgVxp/ih58P8mlDI7VZxBxRSum2oM3KQrwkJFiAaOYzGuLcxLWPNvJDXmFX0HnZAn+TeV16b+wRE5PEO6bWhj3tjuUNq6FpzhDu7tfhoooVpxJf9vaTdRQeThRSmF+0vFn/uVs9WZ7aqoLkT5iUNJqDzoPt8yeDzYnu3h5pJ+eyPdpzeOkb6Q0RctgPBFvW4do=
+  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
+  tar xzf master.tar.gz &&
+  cd kcov-master &&
+  mkdir build &&
+  cd build &&
+  cmake .. &&
+  make &&
+  sudo make install &&
+  cd ../.. &&
+  rm -rf kcov-master &&
+  for file in target/debug/quantiles-*; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
+  bash <(curl -s https://codecov.io/bash) &&
+  echo "Uploaded code coverage"
