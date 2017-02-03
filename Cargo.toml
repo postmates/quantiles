@@ -1,6 +1,6 @@
 [package]
 name = "quantiles"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Brian L. Troutwine <blt@postmates.com>"]
 
 description = "a collection of approximate quantile algorithms"

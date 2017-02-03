@@ -9,8 +9,7 @@ coverage:
 
     patch:
       default:
-        target: 99%
-        threshold: 1%
+        target: 100%
 
     project:
       default:
