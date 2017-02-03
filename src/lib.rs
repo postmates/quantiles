@@ -10,11 +10,13 @@
         unsafe_code,
         unstable_features,
         unused_import_braces, unused_qualifications)]
-#![doc(html_root_url = "https://postmates.github.io/quantiles/")]
 
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
+
+#[macro_use]
+extern crate serde_derive;
 
 pub mod misra_gries;
 pub mod greenwald_khanna;

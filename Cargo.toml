@@ -2,7 +2,6 @@
 name = "quantiles"
 version = "0.3.1"
 authors = ["Brian L. Troutwine <blt@postmates.com>"]
-build = "build.rs"
 
 description = "a collection of approximate quantile algorithms"
 repository = "https://github.com/postmates/quantiles"
@@ -16,10 +15,9 @@ keywords = ["statistics", "histogram", "quantiles", "percentiles", "approximatio
 lto = true
 
 [dev-dependencies]
-quickcheck = "0.3"
+quickcheck = "0.4"
 
 [dependencies]
-serde = "0.8"
+serde = "0.9"
+serde_derive = "0.9"
 
-[build-dependencies]
-serde_codegen = "0.8"
