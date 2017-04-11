@@ -15,7 +15,8 @@ mod integration {
 
             let mut f = File::open(resource).expect("could not open resource file");
             let mut buffer = String::new();
-            f.read_to_string(&mut buffer).expect("could not read resource file");
+            f.read_to_string(&mut buffer)
+                .expect("could not read resource file");
 
             for s in buffer.lines() {
                 let pyld: Vec<f64> = s.split_whitespace()

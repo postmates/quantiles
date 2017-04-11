@@ -78,9 +78,7 @@ pub fn misra_gries<I, V>(stream: I, k: usize) -> BTreeMap<V, usize>
                 *c -= 1;
             }
 
-            counters = counters.into_iter()
-                .filter(|&(_, v)| v != 0)
-                .collect();
+            counters = counters.into_iter().filter(|&(_, v)| v != 0).collect();
         }
     }
 
@@ -89,8 +87,8 @@ pub fn misra_gries<I, V>(stream: I, k: usize) -> BTreeMap<V, usize>
 
 #[cfg(test)]
 mod test {
-    use std::collections::BTreeMap;
     use super::*;
+    use std::collections::BTreeMap;
 
     /// Calculate exact element frequencies using O(n) space.
     pub fn exact_frequencies<I, V>(stream: I) -> BTreeMap<V, usize>
