@@ -33,7 +33,8 @@
 //! `@inproceedings{Greenwald:2001:SOC:375663.375670,
 //!       author = {Greenwald, Michael and Khanna, Sanjeev},
 //!       title = {Space-efficient Online Computation of Quantile Summaries},
-//!       booktitle = {Proceedings of the 2001 ACM SIGMOD International Conference
+//! booktitle = {Proceedings of the 2001 ACM SIGMOD International
+//! Conference
 //!                    on Management of Data},
 //!       series = {SIGMOD '01},
 //!       year = {2001},
@@ -256,7 +257,7 @@ impl<T> Stream<T>
         assert!(i < self.summary.len() - 1);
 
         let t = &self.summary[i];
-        let tnext = &self.summary[i+1];
+        let tnext = &self.summary[i + 1];
         let p = self.p();
 
         let safety_property = t.g + tnext.g + tnext.delta < p;
@@ -308,8 +309,8 @@ impl<T> Stream<T>
 
 #[cfg(test)]
 mod test {
-    use std::ops::Range;
     use super::*;
+    use std::ops::Range;
 
     #[test]
     fn test_find_insert_pos() {
@@ -375,7 +376,7 @@ mod test {
 
         fn test_gk(vs: Vec<u32>) -> bool {
             let mut s = Stream::new(0.25);
-            
+
             for v in vs {
                 s.insert(v);
             }

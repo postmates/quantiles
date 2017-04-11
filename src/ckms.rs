@@ -176,12 +176,13 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
         let s = self.samples.len();
         let mut r = 0;
         if s == 0 {
-            self.samples.insert(0,
-                                Entry {
-                                    v: v,
-                                    g: 1,
-                                    delta: 0,
-                                });
+            self.samples
+                .insert(0,
+                        Entry {
+                            v: v,
+                            g: 1,
+                            delta: 0,
+                        });
             self.n += 1;
             return;
         }
@@ -200,12 +201,13 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
         } else {
             self.invariant(r as f64) - 1
         };
-        self.samples.insert(idx,
-                            Entry {
-                                v: v,
-                                g: 1,
-                                delta: delta,
-                            });
+        self.samples
+            .insert(idx,
+                    Entry {
+                        v: v,
+                        g: 1,
+                        delta: delta,
+                    });
         self.n += 1;
         self.inserts = (self.inserts + 1) % self.insert_threshold;
         if self.inserts == 0 {
