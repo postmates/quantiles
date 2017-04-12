@@ -11,9 +11,10 @@
 //! authors correct in their "Space- and Time-Efficient Deterministic Algorithms
 //! for Biased Quantiles over Data Streams"
 
+use std;
 use std::cmp;
 use std::fmt::Debug;
-use std::ops::{Add, AddAssign};
+use std::ops::{Add, AddAssign, Div, Sub};
 
 #[derive(Debug,Clone,PartialEq, Serialize, Deserialize)]
 struct Entry<T: Copy> {
@@ -50,11 +51,13 @@ pub struct CKMS<T: Copy> {
     samples: Vec<Entry<T>>,
 
     sum: Option<T>,
+    cma: Option<f64>,
     last_in: Option<T>,
 }
 
 impl<T> AddAssign for CKMS<T>
-    where T: Copy + Add<Output = T> + PartialOrd + Debug
+    where T: Copy + Add<Output = T> + Sub<Output = T> + Div<Output = T> +
+    PartialOrd + Debug + std::convert::Into<f64>
 {
     fn add_assign(&mut self, rhs: CKMS<T>) {
         self.last_in = rhs.last_in;
@@ -64,13 +67,25 @@ impl<T> AddAssign for CKMS<T>
             (Some(x), None) => Some(x),
             (Some(x), Some(y)) => Some(x.add(y)),
         };
+        self.cma = match (self.cma, rhs.cma) {
+            (None, None) => None,
+            (None, Some(y)) => Some(y),
+            (Some(x), None) => Some(x),
+            (Some(x), Some(y)) => {
+                let x_n: f64 = self.n as f64;
+                let y_n: f64 = rhs.n as f64;
+                Some(((x_n * x) + (y_n * y)) / (x_n + y_n))
+            }
+        };
         for smpl in rhs.samples {
             self.priv_insert(smpl.v);
         }
     }
 }
 
-impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
+impl<T: Copy + PartialOrd + Debug + Add<Output = T> + Sub<Output = T> +
+        Div<Output = T> + std::convert::Into<f64>> CKMS<T>
+{
     /// Create a new CKMS
     ///
     /// A CKMS is meant to answer quantile queries with a known error bound. If
@@ -85,9 +100,9 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
     /// ```
     /// use quantiles::ckms::CKMS;
     ///
-    /// let mut ckms = CKMS::<u64>::new(0.001);
+    /// let mut ckms = CKMS::<u32>::new(0.001);
     /// for i in 1..1001 {
-    ///     ckms.insert(i as u64);
+    ///     ckms.insert(i as u32);
     /// }
     /// assert_eq!(ckms.query(0.0), Some((1, 1)));
     /// assert_eq!(ckms.query(0.998), Some((998, 998)));
@@ -125,6 +140,7 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
 
             last_in: None,
             sum: None,
+            cma: None,
         }
     }
 
@@ -160,6 +176,22 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
         self.sum
     }
 
+    /// Return the cummulative moving average of the elements added to the CKMS
+    ///
+    /// # Example
+    /// ```
+    /// use quantiles::ckms::CKMS;
+    ///
+    /// let mut ckms = CKMS::new(0.1);
+    /// ckms.insert(0.0);
+    /// ckms.insert(100.0);
+    ///
+    /// assert_eq!(Some(50.0), ckms.cma());
+    /// ```
+    pub fn cma(&self) -> Option<f64> {
+        self.cma
+    }
+
     /// Insert a T into the CKMS
     ///
     /// Insertion will gradulally shift the approximate quantiles. This
@@ -170,6 +202,10 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T>> CKMS<T> {
         self.sum = self.sum.map_or(Some(v), |s| Some(s.add(v)));
         self.last_in = Some(v);
         self.priv_insert(v);
+        // NOTE: priv_insert increases self.n.
+        let v_f64: f64 = v.into();
+        let n: f64 = self.n as f64;
+        self.cma = self.cma.map_or(Some(v_f64), |s| Some(s + ( (v_f64 - s) / n )));
     }
 
     fn priv_insert(&mut self, v: T) {
@@ -361,6 +397,65 @@ mod test {
     }
 
     #[test]
+    fn test_cma() {
+        fn inner(data: Vec<f64>, err: f64) -> TestResult {
+            if data.is_empty() {
+                return TestResult::discard();
+            } else if !(err >= 0.0) || !(err <= 1.0) {
+                return TestResult::discard();
+            }
+
+            let mut ckms = CKMS::<f64>::new(err);
+            for d in &data {
+                ckms.insert(*d);
+            }
+
+            let sum: f64 = data.iter().sum();
+            let expected_mean: f64 = sum / (data.len() as f64);
+            let mean = ckms.cma();
+            assert!(mean.is_some());
+
+            assert!((expected_mean - mean.unwrap()).abs() < err);
+            return TestResult::passed();
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
+    }
+
+    #[test]
+    fn test_cma_add_assign() {
+        fn inner(l_data: Vec<f64>, r_data: Vec<f64>, err: f64) -> TestResult {
+            if !(err >= 0.0) || !(err <= 1.0) {
+                return TestResult::discard();
+            }
+
+            let mut l_ckms = CKMS::<f64>::new(err);
+            for d in &l_data {
+                l_ckms.insert(*d);
+            }
+            let mut r_ckms = CKMS::<f64>::new(err);
+            for d in &r_data {
+                r_ckms.insert(*d);
+            }
+
+            let sum: f64 = l_data.iter().chain(r_data.iter()).sum();
+            let expected_mean: f64 = sum / ((l_data.len() + r_data.len()) as f64);
+            l_ckms += r_ckms;
+            let mean = l_ckms.cma();
+            if mean.is_some() {
+                assert!((expected_mean - mean.unwrap()).abs() < err);
+            }
+            return TestResult::passed();
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
+    }
+
+    #[test]
     fn error_nominal_test() {
         fn inner(mut data: Vec<f64>, prcnt: f64) -> TestResult {
             data.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -440,10 +535,10 @@ mod test {
 
     #[test]
     fn n_invariant_test() {
-        fn n_invariant(fs: Vec<i64>) -> bool {
+        fn n_invariant(fs: Vec<i32>) -> bool {
             let l = fs.len();
 
-            let mut ckms = CKMS::<i64>::new(0.001);
+            let mut ckms = CKMS::<i32>::new(0.001);
             for f in fs {
                 ckms.insert(f);
             }
@@ -453,18 +548,18 @@ mod test {
         QuickCheck::new()
             .tests(10000)
             .max_tests(100000)
-            .quickcheck(n_invariant as fn(Vec<i64>) -> bool);
+            .quickcheck(n_invariant as fn(Vec<i32>) -> bool);
     }
 
     #[test]
     fn add_assign_test() {
-        fn inner(pair: (i64, i64)) -> bool {
-            let mut lhs = CKMS::<i64>::new(0.001);
+        fn inner(pair: (i32, i32)) -> bool {
+            let mut lhs = CKMS::<i32>::new(0.001);
             lhs.insert(pair.0);
-            let mut rhs = CKMS::<i64>::new(0.001);
+            let mut rhs = CKMS::<i32>::new(0.001);
             rhs.insert(pair.1);
 
-            let expected: i64 = pair.0 + pair.1;
+            let expected: i32 = pair.0 + pair.1;
             lhs += rhs;
 
             if let Some(x) = lhs.sum() {
@@ -484,20 +579,20 @@ mod test {
         QuickCheck::new()
             .tests(10000)
             .max_tests(100000)
-            .quickcheck(inner as fn((i64, i64)) -> bool);
+            .quickcheck(inner as fn((i32, i32)) -> bool);
     }
 
     // prop: forany phi. (phi*n - f(phi*n, n)/2) =< r_i =< (phi*n + f(phi*n, n)/2)
     #[test]
     fn query_invariant_test() {
-        fn query_invariant(f: f64, fs: Vec<i64>) -> TestResult {
+        fn query_invariant(f: f64, fs: Vec<i32>) -> TestResult {
             if fs.len() < 1 {
                 return TestResult::discard();
             }
 
             let phi = (1.0 / (1.0 + E.powf(f.abs()))) * 2.0;
 
-            let mut ckms = CKMS::<i64>::new(0.001);
+            let mut ckms = CKMS::<i32>::new(0.001);
             for f in fs {
                 ckms.insert(f);
             }
@@ -515,7 +610,7 @@ mod test {
         QuickCheck::new()
             .tests(10000)
             .max_tests(100000)
-            .quickcheck(query_invariant as fn(f64, Vec<i64>) -> TestResult);
+            .quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -533,8 +628,8 @@ mod test {
     // prop: v_i-1 < v_i =< v_i+1
     #[test]
     fn asc_samples_test() {
-        fn asc_samples(fs: Vec<i64>) -> TestResult {
-            let mut ckms = CKMS::<i64>::new(0.001);
+        fn asc_samples(fs: Vec<i32>) -> TestResult {
+            let mut ckms = CKMS::<i32>::new(0.001);
             let fsc = fs.clone();
             for f in fs {
                 ckms.insert(f);
@@ -556,14 +651,14 @@ mod test {
         QuickCheck::new()
             .tests(10000)
             .max_tests(100000)
-            .quickcheck(asc_samples as fn(Vec<i64>) -> TestResult);
+            .quickcheck(asc_samples as fn(Vec<i32>) -> TestResult);
     }
 
     // prop: forall i. g_i + delta_i =< f(r_i, n)
     #[test]
     fn f_invariant_test() {
-        fn f_invariant(fs: Vec<i64>) -> TestResult {
-            let mut ckms = CKMS::<i64>::new(0.001);
+        fn f_invariant(fs: Vec<i32>) -> TestResult {
+            let mut ckms = CKMS::<i32>::new(0.001);
             for f in fs {
                 ckms.insert(f);
             }
@@ -588,12 +683,12 @@ mod test {
         QuickCheck::new()
             .tests(10000)
             .max_tests(100000)
-            .quickcheck(f_invariant as fn(Vec<i64>) -> TestResult);
+            .quickcheck(f_invariant as fn(Vec<i32>) -> TestResult);
     }
 
     #[test]
     fn compression_test() {
-        let mut ckms = CKMS::<i64>::new(0.1);
+        let mut ckms = CKMS::<i32>::new(0.1);
         for i in 1..10000 {
             ckms.insert(i);
         }
@@ -608,12 +703,12 @@ mod test {
     // prop: post-compression, samples is bounded above by O(1/e log^2 en)
     #[test]
     fn compression_bound_test() {
-        fn compression_bound(fs: Vec<i64>) -> TestResult {
+        fn compression_bound(fs: Vec<i32>) -> TestResult {
             if fs.len() < 15 {
                 return TestResult::discard();
             }
 
-            let mut ckms = CKMS::<i64>::new(0.001);
+            let mut ckms = CKMS::<i32>::new(0.001);
             for f in fs {
                 ckms.insert(f);
             }
@@ -635,7 +730,7 @@ mod test {
         QuickCheck::new()
             .tests(10000)
             .max_tests(100000)
-            .quickcheck(compression_bound as fn(Vec<i64>) -> TestResult);
+            .quickcheck(compression_bound as fn(Vec<i32>) -> TestResult);
     }
 
     #[test]

@@ -9,7 +9,7 @@
         missing_debug_implementations, missing_copy_implementations,
         unsafe_code,
         unstable_features,
-        unused_import_braces, unused_qualifications)]
+        unused_import_braces)]
 
 #[cfg(test)]
 #[macro_use]
