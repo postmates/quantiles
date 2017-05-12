@@ -74,7 +74,7 @@ pub fn misra_gries<I, V>(stream: I, k: usize) -> BTreeMap<V, usize>
         }
 
         if !counted {
-            for (_i, c) in &mut counters {
+            for c in counters.values_mut() {
                 *c -= 1;
             }
 
