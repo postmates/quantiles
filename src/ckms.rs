@@ -16,7 +16,8 @@ use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Div, Sub};
 
-#[derive(Debug,Clone,PartialEq, Serialize, Deserialize)]
+#[derive(Debug,Clone,PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 struct Entry<T: Copy> {
     v: T,
     g: usize,
@@ -25,7 +26,8 @@ struct Entry<T: Copy> {
 
 /// A structure to provide approximate quantiles queries in bounded memory and
 /// with bounded error.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct CKMS<T: Copy> {
     n: usize,
 
