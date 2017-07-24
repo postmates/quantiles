@@ -19,15 +19,15 @@
 //!
 //! identities:
 //!
-//! * r_min(v[i]) = forall j<=i sum of g[j]
-//! * r_max(v[i]) = ( forall j<=i sum of g[j] ) + delta[i]
+//! * `r_min(v[i]) = forall j<=i sum of g[j]`
+//! * `r_max(v[i]) = ( forall j<=i sum of g[j] ) + delta[i]`
 //! * g[i] + delta[i] - 1 is an upper bound on the total number of observations
 //! * between v[i] and v[i-1]
 //! * sum of g[i] = n
 //!
 //! results:
 //!
-//! * max_i(g[i] + delta[i]) <= 2 * epsilon * n
+//! * `max_i(g[i] + delta[i]) <= 2 * epsilon * n`
 //! * a tuple is full if g[i] + delta[i] = floor(2 * epsilon * n)
 //!
 //! `@inproceedings{Greenwald:2001:SOC:375663.375670,
@@ -82,7 +82,8 @@ use std::cmp;
 /// it is less then the element at i+1 if any,
 /// and greater than or equal to the element at i-1 if any.
 pub fn find_insert_pos<T>(vs: &[T], v: &T) -> usize
-    where T: Ord
+where
+    T: Ord,
 {
     if vs.len() <= 10 {
         return find_insert_pos_linear(vs, v);
@@ -104,7 +105,8 @@ pub fn find_insert_pos<T>(vs: &[T], v: &T) -> usize
 /// and greater than or equal to the element at i-1 if any.
 /// Works by scanning the slice from start to end.
 pub fn find_insert_pos_linear<T>(vs: &[T], v: &T) -> usize
-    where T: Ord
+where
+    T: Ord,
 {
     for (i, vi) in vs.iter().enumerate() {
         if v < vi {
@@ -118,7 +120,8 @@ pub fn find_insert_pos_linear<T>(vs: &[T], v: &T) -> usize
 /// 3-tuple of a value v[i], g[i] and delta[i].
 #[derive(Eq, Ord, Debug)]
 pub struct Tuple<T>
-    where T: Ord
+where
+    T: Ord,
 {
     /// v[i], an observation in the set of observations
     pub v: T,
@@ -132,7 +135,8 @@ pub struct Tuple<T>
 }
 
 impl<T> Tuple<T>
-    where T: Ord
+where
+    T: Ord,
 {
     /// Creates a new instance of a Tuple
     pub fn new(v: T, g: usize, delta: usize) -> Tuple<T> {
@@ -145,7 +149,8 @@ impl<T> Tuple<T>
 }
 
 impl<T> PartialEq for Tuple<T>
-    where T: Ord
+where
+    T: Ord,
 {
     fn eq(&self, other: &Self) -> bool {
         self.v == other.v
@@ -153,7 +158,8 @@ impl<T> PartialEq for Tuple<T>
 }
 
 impl<T> PartialOrd for Tuple<T>
-    where T: Ord
+where
+    T: Ord,
 {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         self.v.partial_cmp(&other.v)
@@ -163,7 +169,8 @@ impl<T> PartialOrd for Tuple<T>
 /// The summary S of the observations seen so far.
 #[derive(Debug)]
 pub struct Stream<T>
-    where T: Ord
+where
+    T: Ord,
 {
     /// An ordered sequence of the selected observations
     summary: Vec<Tuple<T>>,
@@ -176,7 +183,8 @@ pub struct Stream<T>
 }
 
 impl<T> Stream<T>
-    where T: Ord
+where
+    T: Ord,
 {
     /// Creates a new instance of a Stream
     pub fn new(epsilon: f64) -> Stream<T> {
@@ -356,7 +364,12 @@ mod test {
         }
 
         for phi in 0..100 {
-            assert!(quantile_in_bounds(1..1001, &stream, (phi as f64) / 100f64, epsilon));
+            assert!(quantile_in_bounds(
+                1..1001,
+                &stream,
+                (phi as f64) / 100f64,
+                epsilon
+            ));
         }
     }
 

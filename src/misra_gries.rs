@@ -52,8 +52,9 @@ use std::collections::btree_map::Entry;
 /// stream of elements `stream` using an ε-approximate frequency count where ε
 /// = 1/(k+1)
 pub fn misra_gries<I, V>(stream: I, k: usize) -> BTreeMap<V, usize>
-    where I: IntoIterator<Item = V>,
-          V: Ord + Clone
+where
+    I: IntoIterator<Item = V>,
+    V: Ord + Clone,
 {
     let mut counters = BTreeMap::new();
     for i in stream {
@@ -92,8 +93,9 @@ mod test {
 
     /// Calculate exact element frequencies using O(n) space.
     pub fn exact_frequencies<I, V>(stream: I) -> BTreeMap<V, usize>
-        where I: IntoIterator<Item = V>,
-              V: Ord + Clone
+    where
+        I: IntoIterator<Item = V>,
+        V: Ord + Clone,
     {
         let mut counts = BTreeMap::new();
         for i in stream {

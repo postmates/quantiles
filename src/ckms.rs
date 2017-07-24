@@ -16,7 +16,7 @@ use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Div, Sub};
 
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 struct Entry<T: Copy> {
     v: T,
@@ -58,8 +58,14 @@ pub struct CKMS<T: Copy> {
 }
 
 impl<T> AddAssign for CKMS<T>
-    where T: Copy + Add<Output = T> + Sub<Output = T> + Div<Output = T> +
-    PartialOrd + Debug + std::convert::Into<f64>
+where
+    T: Copy
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Div<Output = T>
+        + PartialOrd
+        + Debug
+        + std::convert::Into<f64>,
 {
     fn add_assign(&mut self, rhs: CKMS<T>) {
         self.last_in = rhs.last_in;
@@ -85,9 +91,15 @@ impl<T> AddAssign for CKMS<T>
     }
 }
 
-impl<T: Copy + PartialOrd + Debug + Add<Output = T> + Sub<Output = T> +
-        Div<Output = T> + std::convert::Into<f64>> CKMS<T>
-{
+impl<
+    T: Copy
+        + PartialOrd
+        + Debug
+        + Add<Output = T>
+        + Sub<Output = T>
+        + Div<Output = T>
+        + std::convert::Into<f64>,
+> CKMS<T> {
     /// Create a new CKMS
     ///
     /// A CKMS is meant to answer quantile queries with a known error bound. If
@@ -207,20 +219,22 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T> + Sub<Output = T> +
         // NOTE: priv_insert increases self.n.
         let v_f64: f64 = v.into();
         let n: f64 = self.n as f64;
-        self.cma = self.cma.map_or(Some(v_f64), |s| Some(s + ( (v_f64 - s) / n )));
+        self.cma = self.cma
+            .map_or(Some(v_f64), |s| Some(s + ((v_f64 - s) / n)));
     }
 
     fn priv_insert(&mut self, v: T) {
         let s = self.samples.len();
         let mut r = 0;
         if s == 0 {
-            self.samples
-                .insert(0,
-                        Entry {
-                            v: v,
-                            g: 1,
-                            delta: 0,
-                        });
+            self.samples.insert(
+                0,
+                Entry {
+                    v: v,
+                    g: 1,
+                    delta: 0,
+                },
+            );
             self.n += 1;
             return;
         }
@@ -239,13 +253,14 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T> + Sub<Output = T> +
         } else {
             self.invariant(r as f64) - 1
         };
-        self.samples
-            .insert(idx,
-                    Entry {
-                        v: v,
-                        g: 1,
-                        delta: delta,
-                    });
+        self.samples.insert(
+            idx,
+            Entry {
+                v: v,
+                g: 1,
+                delta: delta,
+            },
+        );
         self.n += 1;
         self.inserts = (self.inserts + 1) % self.insert_threshold;
         if self.inserts == 0 {
@@ -346,7 +361,11 @@ impl<T: Copy + PartialOrd + Debug + Add<Output = T> + Sub<Output = T> +
     #[inline]
     fn invariant(&self, r: f64) -> usize {
         let i = (2.0 * self.error * r).floor() as usize;
-        if 1 > i { 1 } else { i }
+        if 1 > i {
+            1
+        } else {
+            i
+        }
     }
 
     fn compress(&mut self) {
@@ -474,12 +493,14 @@ mod test {
             }
 
             if let Some((_, v)) = ckms.query(prcnt) {
-                debug_assert!((v - percentile(&data, prcnt)) < err,
-                              "v: {} | percentile: {} | prcnt: {} | data: {:?}",
-                              v,
-                              percentile(&data, prcnt),
-                              prcnt,
-                              data);
+                debug_assert!(
+                    (v - percentile(&data, prcnt)) < err,
+                    "v: {} | percentile: {} | prcnt: {} | data: {:?}",
+                    v,
+                    percentile(&data, prcnt),
+                    prcnt,
+                    data
+                );
                 TestResult::passed()
             } else {
                 TestResult::failed()
@@ -518,12 +539,14 @@ mod test {
             ckms += ckms_rhs;
 
             if let Some((_, v)) = ckms.query(prcnt) {
-                debug_assert!((v - percentile(&data, prcnt)) < err,
-                              "v: {} | percentile: {} | prcnt: {} | data: {:?}",
-                              v,
-                              percentile(&data, prcnt),
-                              prcnt,
-                              data);
+                debug_assert!(
+                    (v - percentile(&data, prcnt)) < err,
+                    "v: {} | percentile: {} | prcnt: {} | data: {:?}",
+                    v,
+                    percentile(&data, prcnt),
+                    prcnt,
+                    data
+                );
                 TestResult::passed()
             } else {
                 TestResult::failed()
@@ -604,8 +627,9 @@ mod test {
                 Some((rank, _)) => {
                     let nphi = phi * (ckms.n as f64);
                     let fdiv2 = (ckms.invariant(nphi) as f64) / 2.0;
-                    TestResult::from_bool(((nphi - fdiv2) <= (rank as f64)) ||
-                                          ((rank as f64) <= (nphi + fdiv2)))
+                    TestResult::from_bool(
+                        ((nphi - fdiv2) <= (rank as f64)) || ((rank as f64) <= (nphi + fdiv2)),
+                    )
                 }
             }
         }
@@ -720,10 +744,12 @@ mod test {
             let bound = (1.0 / ckms.error) * (ckms.error * (ckms.count() as f64)).log10().powi(2);
 
             if !(s <= bound) {
-                println!("error: {:?} n: {:?} log10: {:?}",
-                         ckms.error,
-                         ckms.count() as f64,
-                         (ckms.error * (ckms.count() as f64)).log10().powi(2));
+                println!(
+                    "error: {:?} n: {:?} log10: {:?}",
+                    ckms.error,
+                    ckms.count() as f64,
+                    (ckms.error * (ckms.count() as f64)).log10().powi(2)
+                );
                 println!("{:?} <= {:?}", s, bound);
                 return TestResult::failed();
             }
