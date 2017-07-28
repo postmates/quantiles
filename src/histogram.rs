@@ -8,6 +8,7 @@
 
 use std::cmp;
 use std::fmt;
+use std::ops;
 
 #[derive(Debug, Copy, Clone)]
 /// The upper bound for each `Histogram` bins. The user is responsible for
@@ -155,7 +156,7 @@ where
 
         Ok(Histogram {
             count: 0,
-            sum: None, // TODO make summations, tests for same
+            sum: None,
             bins: bins,
         })
     }
@@ -177,7 +178,15 @@ where
     /// assert_eq!(histo.total_between(Bound::Finite(10), Bound::Finite(100)),
     /// 2);
     /// ```
-    pub fn insert(&mut self, value: T) -> () {
+    pub fn insert(&mut self, value: T) -> ()
+    where
+        T: ops::Add<Output = T>,
+    {
+        self.sum = match self.sum {
+            None => Some(value),
+            Some(x) => Some(x + value),
+        };
+
         let mut idx = 0;
         let val_bound = Bound::Finite(value);
         for &(ref bound, _) in &self.bins {
@@ -208,6 +217,27 @@ where
     /// ```
     pub fn count(&self) -> usize {
         self.count
+    }
+
+    /// Returns the sum of the items 'stored' in the histogram
+    ///
+    /// # Examples
+    /// ```
+    /// use quantiles::histogram::Histogram;
+    ///
+    /// let mut histo = Histogram::<u64>::new(vec![10, 256, 1987,
+    /// 1990]).unwrap();
+    ///
+    /// assert_eq!(histo.sum(), None);
+    ///
+    /// for i in 0..2048 {
+    ///     histo.insert(i as u64);
+    /// }
+    ///
+    /// assert_eq!(histo.sum(), Some(2096128));
+    /// ```
+    pub fn sum(&self) -> Option<T> {
+        self.sum
     }
 
     /// Total number of items below supplied upper_bound
@@ -320,18 +350,41 @@ mod test {
                         }
                         bounds.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-                        let mut histo = Histogram::new(bounds.clone()).unwrap();
+                        let mut histo = Histogram::new(bounds).unwrap();
                         let total = pyld.len();
                         for i in pyld.clone() {
                             histo.insert(i);
                         }
 
-                        let mut bounds: Vec<Bound<$t>> =
-                            bounds.into_iter().map(|x| Bound::Finite(x)).collect();
-                        bounds.push(Bound::PosInf);
-
                         // confirm that the histogram holds the correct number of items
                         assert_eq!(total, histo.count());
+
+                        TestResult::passed()
+                    }
+                    QuickCheck::new().quickcheck(inner as fn(Vec<$t>, Vec<$t>) -> TestResult);
+                }
+
+                #[test]
+                fn test_insertion_sum() {
+                    fn inner(mut bounds: Vec<$t>, pyld: Vec<$t>) -> TestResult {
+                        if bounds.is_empty() {
+                            return TestResult::discard();
+                        }
+                        bounds.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+                        let mut histo = Histogram::new(bounds).unwrap();
+                        let mut sum: $t = 0 as $t;
+                        for i in pyld.clone() {
+                            sum += i;
+                            histo.insert(i);
+                        }
+
+                        // confirm that the histogram holds the correct sum of items
+                        if pyld.is_empty() {
+                            assert_eq!(None, histo.sum());
+                        } else {
+                            assert_eq!(Some(sum), histo.sum());
+                        }
 
                         TestResult::passed()
                     }
