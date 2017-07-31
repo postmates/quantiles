@@ -12,6 +12,7 @@ use std::ops;
 use std::slice;
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 /// The upper bound for each `Histogram` bins. The user is responsible for
 /// determining effective bins for their use-case.
 pub enum Bound<T>
@@ -70,13 +71,26 @@ where
     }
 }
 
+impl<T> ops::AddAssign for Histogram<T>
+    where
+    T: Copy + cmp::PartialOrd + fmt::Debug {
+    fn add_assign(&mut self, rhs: Histogram<T>) {
+        for (i, bnd) in rhs.iter().enumerate() {
+            let mut bin = self.bins[i];
+            assert_eq!(bin.0, bnd.0);
+            bin.1 += bnd.1;
+        }
+    }
+}
+
 /// A binning histogram of unequal, pre-defined bins
 ///
 /// This implementation performs summation over `T`. It's possible that this
 /// summation will overflow, a crash condition in Rust. Unfortunately there's no
 /// generic saturating / checked add over a generic. Please take care when
 /// inserting into Histogram for small `T`s.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct Histogram<T>
 where
     T: Copy,
