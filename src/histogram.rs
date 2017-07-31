@@ -71,6 +71,11 @@ where
 }
 
 /// A binning histogram of unequal, pre-defined bins
+///
+/// This implementation performs summation over `T`. It's possible that this
+/// summation will overflow, a crash condition in Rust. Unfortunately there's no
+/// generic saturating / checked add over a generic. Please take care when
+/// inserting into Histogram for small `T`s.
 #[derive(Debug)]
 pub struct Histogram<T>
 where
@@ -83,11 +88,16 @@ where
 
 /// Struct to implement Iterator over Histogram
 #[derive(Debug)]
-pub struct Iter<'a, T> where T: 'a + Copy {
+pub struct Iter<'a, T>
+where
+    T: 'a + Copy,
+{
     rx: slice::Iter<'a, (Bound<T>, usize)>,
 }
 
-impl<'a, T> Iterator for Iter<'a, T> where T: Copy
+impl<'a, T> Iterator for Iter<'a, T>
+where
+    T: Copy,
 {
     type Item = &'a (Bound<T>, usize);
 
@@ -353,8 +363,11 @@ where
     ///     histo.insert(i as u64);
     /// }
     ///
-    /// let expected: Vec<(Bound<u64>, usize)> = vec![(Bound::Finite(10), 11), (Bound::Finite(256), 246), (Bound::Finite(1987), 1731), (Bound::Finite(1990), 3), (Bound::PosInf, 57)];
-    /// let actual: Vec<(Bound<u64>, usize)> = histo.iter().map(|x| *x).collect();
+    /// let expected: Vec<(Bound<u64>, usize)> = vec![(Bound::Finite(10), 11),
+    /// (Bound::Finite(256), 246), (Bound::Finite(1987), 1731),
+    /// (Bound::Finite(1990), 3), (Bound::PosInf, 57)];
+    /// let actual: Vec<(Bound<u64>, usize)> = histo.iter().map(|x|
+    /// *x).collect();
     /// assert_eq!(expected[0], actual[0]);
     /// assert_eq!(expected[1], actual[1]);
     /// assert_eq!(expected[2], actual[2]);
@@ -362,7 +375,9 @@ where
     /// assert_eq!(expected[4], actual[4]);
     /// ```
     pub fn iter(&self) -> Iter<T> {
-        Iter { rx: self.bins.iter() }
+        Iter {
+            rx: self.bins.iter(),
+        }
     }
 }
 
@@ -573,6 +588,7 @@ mod test {
             }
         }
     }
+    // Why no generation for u8? Please see note on Histogram. 
     generate_tests!(u16, u16);
     generate_tests!(u32, u32);
     generate_tests!(i16, i16);
