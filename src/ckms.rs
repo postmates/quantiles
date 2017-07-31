@@ -406,8 +406,6 @@ impl<
 
 #[cfg(test)]
 mod test {
-    extern crate quickcheck;
-
     use super::*;
     use quickcheck::{QuickCheck, TestResult};
     use std::f64::consts::E;
