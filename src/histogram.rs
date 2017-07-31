@@ -9,6 +9,7 @@
 use std::cmp;
 use std::fmt;
 use std::ops;
+use std::slice;
 
 #[derive(Debug, Copy, Clone)]
 /// The upper bound for each `Histogram` bins. The user is responsible for
@@ -59,7 +60,12 @@ where
                     Bound::PosInf => false,
                 }
             }
-            Bound::PosInf => false,
+            Bound::PosInf => {
+                match *other {
+                    Bound::Finite(_) => false,
+                    Bound::PosInf => true,
+                }
+            }
         }
     }
 }
@@ -73,6 +79,21 @@ where
     count: usize,
     sum: Option<T>,
     bins: Vec<(Bound<T>, usize)>,
+}
+
+/// Struct to implement Iterator over Histogram
+#[derive(Debug)]
+pub struct Iter<'a, T> where T: 'a + Copy {
+    rx: slice::Iter<'a, (Bound<T>, usize)>,
+}
+
+impl<'a, T> Iterator for Iter<'a, T> where T: Copy
+{
+    type Item = &'a (Bound<T>, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.rx.next()
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -320,6 +341,29 @@ where
         }
         count
     }
+
+    /// Iterate over the bounds and counts of bounds
+    /// # Examples
+    /// ```
+    /// use quantiles::histogram::{Bound, Histogram};
+    ///
+    /// let mut histo = Histogram::<u64>::new(vec![10, 256, 1987,
+    /// 1990]).unwrap();
+    /// for i in 0..2048 {
+    ///     histo.insert(i as u64);
+    /// }
+    ///
+    /// let expected: Vec<(Bound<u64>, usize)> = vec![(Bound::Finite(10), 11), (Bound::Finite(256), 246), (Bound::Finite(1987), 1731), (Bound::Finite(1990), 3), (Bound::PosInf, 57)];
+    /// let actual: Vec<(Bound<u64>, usize)> = histo.iter().map(|x| *x).collect();
+    /// assert_eq!(expected[0], actual[0]);
+    /// assert_eq!(expected[1], actual[1]);
+    /// assert_eq!(expected[2], actual[2]);
+    /// assert_eq!(expected[3], actual[3]);
+    /// assert_eq!(expected[4], actual[4]);
+    /// ```
+    pub fn iter(&self) -> Iter<T> {
+        Iter { rx: self.bins.iter() }
+    }
 }
 
 #[cfg(test)]
@@ -531,8 +575,12 @@ mod test {
     }
     generate_tests!(u16, u16);
     generate_tests!(u32, u32);
+    generate_tests!(i16, i16);
+    generate_tests!(i32, i32);
     generate_tests!(f32, f32);
     generate_tests!(f64, f64);
     generate_tests!(u64, u64);
+    generate_tests!(i64, i64);
     generate_tests!(usize, usize);
+    generate_tests!(isize, isize);
 }
