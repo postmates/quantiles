@@ -393,6 +393,32 @@ where
             rx: self.bins.iter(),
         }
     }
+
+    /// Convert a Histogram into an array of tuples
+    ///
+    /// # Examples
+    /// ```
+    /// use quantiles::histogram::{Bound, Histogram};
+    ///
+    /// let mut histo = Histogram::<u64>::new(vec![10, 256, 1987,
+    /// 1990]).unwrap();
+    /// for i in 0..2048 {
+    ///     histo.insert(i as u64);
+    /// }
+    ///
+    /// let expected: Vec<(Bound<u64>, usize)> = vec![(Bound::Finite(10), 11),
+    /// (Bound::Finite(256), 246), (Bound::Finite(1987), 1731),
+    /// (Bound::Finite(1990), 3), (Bound::PosInf, 57)];
+    /// let actual: Vec<(Bound<u64>, usize)> = histo.into_vec();
+    /// assert_eq!(expected[0], actual[0]);
+    /// assert_eq!(expected[1], actual[1]);
+    /// assert_eq!(expected[2], actual[2]);
+    /// assert_eq!(expected[3], actual[3]);
+    /// assert_eq!(expected[4], actual[4]);
+    /// ```
+    pub fn into_vec(self) -> Vec<(Bound<T>, usize)> {
+        self.iter().map(|x| *x).collect()
+    }
 }
 
 #[cfg(test)]
@@ -602,7 +628,7 @@ mod test {
             }
         }
     }
-    // Why no generation for u8? Please see note on Histogram. 
+    // Why no generation for u8? Please see note on Histogram.
     generate_tests!(u16, u16);
     generate_tests!(u32, u32);
     generate_tests!(i16, i16);
