@@ -73,8 +73,17 @@ where
 
 impl<T> ops::AddAssign for Histogram<T>
     where
-    T: Copy + cmp::PartialOrd + fmt::Debug {
+    T: Copy + cmp::PartialOrd + fmt::Debug + ops::Add<Output = T> {
     fn add_assign(&mut self, rhs: Histogram<T>) {
+        let lhs_sum = self.sum;
+        let rhs_sum = rhs.sum;
+        let sum = match (lhs_sum, rhs_sum) {
+            (None, None) => None,
+            (None, Some(y)) => Some(y),
+            (Some(x), None) => Some(x),
+            (Some(x), Some(y)) => Some(x+y),
+        };
+        self.sum = sum;
         for (i, bnd) in rhs.iter().enumerate() {
             let mut bin = self.bins[i];
             assert_eq!(bin.0, bnd.0);
