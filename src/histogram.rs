@@ -12,6 +12,7 @@ use std::ops;
 use std::slice;
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 /// The upper bound for each `Histogram` bins. The user is responsible for
 /// determining effective bins for their use-case.
 pub enum Bound<T>
@@ -70,13 +71,35 @@ where
     }
 }
 
+impl<T> ops::AddAssign for Histogram<T>
+    where
+    T: Copy + cmp::PartialOrd + fmt::Debug + ops::Add<Output = T> {
+    fn add_assign(&mut self, rhs: Histogram<T>) {
+        let lhs_sum = self.sum;
+        let rhs_sum = rhs.sum;
+        let sum = match (lhs_sum, rhs_sum) {
+            (None, None) => None,
+            (None, Some(y)) => Some(y),
+            (Some(x), None) => Some(x),
+            (Some(x), Some(y)) => Some(x+y),
+        };
+        self.sum = sum;
+        for (i, bnd) in rhs.iter().enumerate() {
+            let mut bin = self.bins[i];
+            assert_eq!(bin.0, bnd.0);
+            bin.1 += bnd.1;
+        }
+    }
+}
+
 /// A binning histogram of unequal, pre-defined bins
 ///
 /// This implementation performs summation over `T`. It's possible that this
 /// summation will overflow, a crash condition in Rust. Unfortunately there's no
 /// generic saturating / checked add over a generic. Please take care when
 /// inserting into Histogram for small `T`s.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct Histogram<T>
 where
     T: Copy,
@@ -379,6 +402,32 @@ where
             rx: self.bins.iter(),
         }
     }
+
+    /// Convert a Histogram into an array of tuples
+    ///
+    /// # Examples
+    /// ```
+    /// use quantiles::histogram::{Bound, Histogram};
+    ///
+    /// let mut histo = Histogram::<u64>::new(vec![10, 256, 1987,
+    /// 1990]).unwrap();
+    /// for i in 0..2048 {
+    ///     histo.insert(i as u64);
+    /// }
+    ///
+    /// let expected: Vec<(Bound<u64>, usize)> = vec![(Bound::Finite(10), 11),
+    /// (Bound::Finite(256), 246), (Bound::Finite(1987), 1731),
+    /// (Bound::Finite(1990), 3), (Bound::PosInf, 57)];
+    /// let actual: Vec<(Bound<u64>, usize)> = histo.into_vec();
+    /// assert_eq!(expected[0], actual[0]);
+    /// assert_eq!(expected[1], actual[1]);
+    /// assert_eq!(expected[2], actual[2]);
+    /// assert_eq!(expected[3], actual[3]);
+    /// assert_eq!(expected[4], actual[4]);
+    /// ```
+    pub fn into_vec(self) -> Vec<(Bound<T>, usize)> {
+        self.iter().map(|x| *x).collect()
+    }
 }
 
 #[cfg(test)]
@@ -588,7 +637,7 @@ mod test {
             }
         }
     }
-    // Why no generation for u8? Please see note on Histogram. 
+    // Why no generation for u8? Please see note on Histogram.
     generate_tests!(u16, u16);
     generate_tests!(u32, u32);
     generate_tests!(i16, i16);
