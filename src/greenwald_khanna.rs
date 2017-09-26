@@ -283,7 +283,7 @@ where
         assert!(i < self.summary.len() - 1);
 
         let t = self.summary.remove(i);
-        let mut tnext = &mut self.summary[i];
+        let tnext = &mut self.summary[i];
 
         tnext.g += t.g;
     }
