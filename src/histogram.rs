@@ -84,10 +84,10 @@ impl<T> ops::AddAssign for Histogram<T>
             (Some(x), Some(y)) => Some(x+y),
         };
         self.sum = sum;
+        self.count += rhs.count;
         for (i, bnd) in rhs.iter().enumerate() {
-            let mut bin = self.bins[i];
-            assert_eq!(bin.0, bnd.0);
-            bin.1 += bnd.1;
+            assert_eq!(self.bins[i].0, bnd.0);
+            self.bins[i].1 += bnd.1;
         }
     }
 }
@@ -435,6 +435,61 @@ mod test {
     use super::*;
     use quickcheck::{QuickCheck, TestResult};
 
+    #[test]
+    fn test_addassign() {
+        fn inner(mut bounds: Vec<f64>, lpyld: Vec<f64>, rpyld: Vec<f64>) -> TestResult {
+            if bounds.is_empty() {
+                return TestResult::discard();
+            }
+            bounds.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            
+            let mut x = Histogram::new(bounds.clone()).unwrap();
+            for i in lpyld {
+                x.insert(i);
+            }
+            let mut y = Histogram::new(bounds).unwrap();
+            for i in rpyld {
+                y.insert(i);
+            }
+            
+            let mut res = x.clone();
+            res += y.clone();
+
+            assert_eq!(res.count(), x.count() + y.count());
+            if res.sum().is_some() {
+                match (x.sum().is_some(), y.sum().is_some()) {
+                    (true, true) => {
+                        assert_eq!(res.sum().unwrap(), x.sum().unwrap() + y.sum().unwrap());
+                    },
+                    (false, true) => {
+                        assert_eq!(res.sum().unwrap(), y.sum().unwrap());
+                    },
+                    (true, false) => {
+                        assert_eq!(res.sum().unwrap(), x.sum().unwrap());
+                    },
+                    (false, false) => { unreachable!() },
+                }
+            } else {
+                assert!(x.sum().is_none());
+                assert!(y.sum().is_none());
+            }
+
+            let mut x_iter = x.iter();
+            let mut y_iter = y.iter();
+            for &(bound, count) in res.iter() {
+                let next_x = x_iter.next().unwrap();
+                let next_y = y_iter.next().unwrap();
+
+                assert_eq!(bound, next_x.0);
+                assert_eq!(bound, next_y.0);
+
+                assert_eq!(count, next_x.1 + next_y.1)
+            }
+            TestResult::passed()
+        }
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, Vec<f64>) -> TestResult);
+    }
+
     macro_rules! generate_tests {
         ($m:ident, $t:ty) => {
             mod $m {
@@ -516,9 +571,9 @@ mod test {
                             bounds.into_iter().map(|x| Bound::Finite(x)).collect();
                         bounds.push(Bound::PosInf);
 
-                        // confirm that the histogram has correctly binned by asserting that
-                        // for every bound the correct number of payload items are below
-                        // that upper bound
+                        // confirm that the histogram has correctly binned by
+                        // asserting that for every bound the correct number of
+                        // payload items are below that upper bound
                         pyld.sort_by(|a, b| a.partial_cmp(b).unwrap());
                         for b in bounds.iter() {
                             let mut below_count = 0;
@@ -561,9 +616,9 @@ mod test {
                             bounds.into_iter().map(|x| Bound::Finite(x)).collect();
                         bounds.push(Bound::PosInf);
 
-                        // confirm that the histogram has correctly binned by asserting that
-                        // for every bound the correct number of payload items are above
-                        // that upper bound
+                        // confirm that the histogram has correctly binned by
+                        // asserting that for every bound the correct number of
+                        // payload items are above that upper bound
                         pyld.sort_by(|a, b| a.partial_cmp(b).unwrap());
                         for b in bounds.iter() {
                             let mut above_count = 0;
@@ -602,9 +657,10 @@ mod test {
                            bounds.into_iter().map(|x| Bound::Finite(x)).collect();
                        bounds.push(Bound::PosInf);
 
-                       // confirm that the histogram has correctly binned by asserting that
-                       // for every (lower, upper] bound the correct number of payload
-                       // items are recorded between that bound
+                       // confirm that the histogram has correctly binned by
+                       // asserting that for every (lower, upper] bound the
+                       // correct number of payload items are recorded between
+                       // that bound
                        pyld.sort_by(|a, b| a.partial_cmp(b).unwrap());
                        for lower_b in bounds.iter() {
                            for upper_b in bounds.iter() {
