@@ -33,18 +33,14 @@ where
 {
     fn partial_cmp(&self, other: &Bound<T>) -> Option<cmp::Ordering> {
         match *self {
-            Bound::Finite(ref x) => {
-                match *other {
-                    Bound::Finite(y) => x.partial_cmp(&y),
-                    Bound::PosInf => Some(cmp::Ordering::Less),
-                }
-            }
-            Bound::PosInf => {
-                match *other {
-                    Bound::Finite(_) => Some(cmp::Ordering::Greater),
-                    Bound::PosInf => Some(cmp::Ordering::Equal),
-                }
-            }
+            Bound::Finite(ref x) => match *other {
+                Bound::Finite(y) => x.partial_cmp(&y),
+                Bound::PosInf => Some(cmp::Ordering::Less),
+            },
+            Bound::PosInf => match *other {
+                Bound::Finite(_) => Some(cmp::Ordering::Greater),
+                Bound::PosInf => Some(cmp::Ordering::Equal),
+            },
         }
     }
 }
@@ -55,25 +51,22 @@ where
 {
     fn eq(&self, other: &Bound<T>) -> bool {
         match *self {
-            Bound::Finite(ref x) => {
-                match *other {
-                    Bound::Finite(y) => y.eq(x),
-                    Bound::PosInf => false,
-                }
-            }
-            Bound::PosInf => {
-                match *other {
-                    Bound::Finite(_) => false,
-                    Bound::PosInf => true,
-                }
-            }
+            Bound::Finite(ref x) => match *other {
+                Bound::Finite(y) => y.eq(x),
+                Bound::PosInf => false,
+            },
+            Bound::PosInf => match *other {
+                Bound::Finite(_) => false,
+                Bound::PosInf => true,
+            },
         }
     }
 }
 
 impl<T> ops::AddAssign for Histogram<T>
-    where
-    T: Copy + cmp::PartialOrd + fmt::Debug + ops::Add<Output = T> {
+where
+    T: Copy + cmp::PartialOrd + fmt::Debug + ops::Add<Output = T>,
+{
     fn add_assign(&mut self, rhs: Histogram<T>) {
         let lhs_sum = self.sum;
         let rhs_sum = rhs.sum;
@@ -81,7 +74,7 @@ impl<T> ops::AddAssign for Histogram<T>
             (None, None) => None,
             (None, Some(y)) => Some(y),
             (Some(x), None) => Some(x),
-            (Some(x), Some(y)) => Some(x+y),
+            (Some(x), Some(y)) => Some(x + y),
         };
         self.sum = sum;
         self.count += rhs.count;
@@ -426,7 +419,7 @@ where
     /// assert_eq!(expected[4], actual[4]);
     /// ```
     pub fn into_vec(self) -> Vec<(Bound<T>, usize)> {
-        self.iter().map(|x| *x).collect()
+        self.iter().cloned().collect()
     }
 }
 
@@ -442,7 +435,7 @@ mod test {
                 return TestResult::discard();
             }
             bounds.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            
+
             let mut x = Histogram::new(bounds.clone()).unwrap();
             for i in lpyld {
                 x.insert(i);
@@ -451,7 +444,7 @@ mod test {
             for i in rpyld {
                 y.insert(i);
             }
-            
+
             let mut res = x.clone();
             res += y.clone();
 
@@ -460,14 +453,14 @@ mod test {
                 match (x.sum().is_some(), y.sum().is_some()) {
                     (true, true) => {
                         assert_eq!(res.sum().unwrap(), x.sum().unwrap() + y.sum().unwrap());
-                    },
+                    }
                     (false, true) => {
                         assert_eq!(res.sum().unwrap(), y.sum().unwrap());
-                    },
+                    }
                     (true, false) => {
                         assert_eq!(res.sum().unwrap(), x.sum().unwrap());
-                    },
-                    (false, false) => { unreachable!() },
+                    }
+                    (false, false) => unreachable!(),
                 }
             } else {
                 assert!(x.sum().is_none());

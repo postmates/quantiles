@@ -1,7 +1,7 @@
 #![feature(test)]
 
-extern crate test;
 extern crate quantiles;
+extern crate test;
 
 use self::test::Bencher;
 use quantiles::ckms::CKMS;
@@ -10,7 +10,7 @@ use quantiles::ckms::CKMS;
 fn bench_sequential_insert(b: &mut Bencher) {
     b.iter(|| {
         let mut ckms = CKMS::<i32>::new(0.001);
-        for i in 0..10000 {
+        for i in 0..10_000 {
             ckms.insert(i);
         }
         ckms.query(0.999);
@@ -20,7 +20,7 @@ fn bench_sequential_insert(b: &mut Bencher) {
 #[bench]
 fn bench_inverted_insert(b: &mut Bencher) {
     b.iter(|| {
-        let seq = (0..10000).rev();
+        let seq = (0..10_000).rev();
         let mut ckms = CKMS::<i32>::new(0.001);
         for i in seq {
             ckms.insert(i);

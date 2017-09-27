@@ -383,7 +383,7 @@ impl<
             let nxt_g = self.samples[i + 1].g;
             let nxt_delta = self.samples[i + 1].delta;
 
-            if cur_g + nxt_g + nxt_delta <= self.invariant(r as f64) {
+            if cur_g + nxt_g + nxt_delta <= self.invariant(f64::from(r)) {
                 let ent = Entry {
                     v: nxt_v,
                     g: nxt_g + cur_g,

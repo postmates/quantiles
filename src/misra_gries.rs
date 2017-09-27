@@ -66,12 +66,10 @@ where
                 *item.get_mut() += 1;
                 counted = true;
             }
-            Entry::Vacant(slot) => {
-                if counters_len < k {
-                    slot.insert(1);
-                    counted = true;
-                }
-            }
+            Entry::Vacant(slot) => if counters_len < k {
+                slot.insert(1);
+                counted = true;
+            },
         }
 
         if !counted {
