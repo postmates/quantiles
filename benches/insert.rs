@@ -6,25 +6,36 @@ extern crate test;
 use self::test::Bencher;
 use quantiles::ckms::CKMS;
 
-#[bench]
-fn bench_sequential_insert(b: &mut Bencher) {
-    b.iter(|| {
-        let mut ckms = CKMS::<i32>::new(0.001);
-        for i in 0..10_000 {
-            ckms.insert(i);
+macro_rules! generate_tests {
+    ($t:ty, $fn:ident, $s:expr) => {
+        #[bench]
+        fn $fn(b: &mut Bencher) {
+            b.iter(|| {
+                let mut ckms = CKMS::<$t>::new(0.001);
+                for i in 0..$s {
+                    ckms.insert(i);
+                }
+            });
         }
-        ckms.query(0.999);
-    });
+    }
 }
 
-#[bench]
-fn bench_inverted_insert(b: &mut Bencher) {
-    b.iter(|| {
-        let seq = (0..10_000).rev();
-        let mut ckms = CKMS::<i32>::new(0.001);
-        for i in seq {
-            ckms.insert(i);
-        }
-        ckms.query(0.999);
-    });
+mod u16 {
+    use super::*;
+
+    generate_tests!(u16, bench_insert_100, 100);
+    generate_tests!(u16, bench_insert_1000, 1000);
+    generate_tests!(u16, bench_insert_10000, 10_000);
 }
+
+// mod u32 {
+//     use super::*;
+
+//     generate_tests!(u32, bench_insert_100, 100);
+//     generate_tests!(u32, bench_insert_1000, 1000);
+//     generate_tests!(u32, bench_insert_10000, 10_000);
+//     generate_tests!(u32, bench_insert_100000, 100_000);
+//     generate_tests!(u32, bench_insert_1000000, 1_000_000);
+//     generate_tests!(u32, bench_insert_10000000, 10_000_000);
+//     generate_tests!(u32, bench_insert_100000000, 100_000_000);
+// }
