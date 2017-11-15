@@ -225,7 +225,6 @@ impl<
 
     fn priv_insert(&mut self, v: T) {
         let s = self.samples.len();
-        let mut r = 0;
         if s == 0 {
             self.samples.insert(
                 0,
@@ -242,15 +241,18 @@ impl<
         let mut idx = 0;
         for i in 0..s {
             let smpl = &self.samples[i];
-            match smpl.v.partial_cmp(&v) {
-                Some(cmp::Ordering::Less) => idx += 1,
+            match smpl.v.partial_cmp(&v).unwrap() {
+                cmp::Ordering::Less => idx += 1,
                 _ => break,
             }
-            r += smpl.g;
         }
         let delta = if idx == 0 || idx == s {
             0
         } else {
+            let mut r = 0;
+            for smpl in &self.samples[..idx] {
+                r += smpl.g;
+            }
             self.invariant(r as f64) - 1
         };
         self.samples.insert(
