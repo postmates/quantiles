@@ -363,7 +363,7 @@ impl<
     #[inline]
     fn invariant(&self, r: f64) -> usize {
         let i = (2.0 * self.error * r).floor() as usize;
-        if 1 > i {
+        if i == 0 {
             1
         } else {
             i
