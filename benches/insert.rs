@@ -6,14 +6,24 @@ extern crate test;
 use self::test::Bencher;
 use quantiles::ckms::CKMS;
 
+fn xorshift32(seed: u32) -> u32 {
+    let mut x = seed;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    x
+}
+
 macro_rules! generate_tests {
     ($t:ty, $fn:ident, $s:expr) => {
         #[bench]
         fn $fn(b: &mut Bencher) {
+            let mut seed = 1972;
             b.iter(|| {
                 let mut ckms = CKMS::<$t>::new(0.001);
-                for i in 0..$s {
-                    ckms.insert(i);
+                for _ in 0..$s {
+                    ckms.insert(seed);
+                    seed = xorshift32(seed);
                 }
             });
         }
@@ -35,7 +45,7 @@ mod u32 {
     generate_tests!(u32, bench_insert_100, 100);
     generate_tests!(u32, bench_insert_1000, 1000);
     generate_tests!(u32, bench_insert_10000, 10_000);
-    generate_tests!(u32, bench_insert_100000, 100_000);
+    // generate_tests!(u32, bench_insert_100000, 100_000);
 //     generate_tests!(u32, bench_insert_1000000, 1_000_000);
 //     generate_tests!(u32, bench_insert_10000000, 10_000_000);
 //     generate_tests!(u32, bench_insert_100000000, 100_000_000);
