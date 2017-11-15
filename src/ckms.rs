@@ -12,9 +12,20 @@
 //! for Biased Quantiles over Data Streams"
 
 use intrusive_collections::{LinkedList, LinkedListLink};
+#[cfg(feature = "serde_support")]
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+#[cfg(feature = "serde_support")]
+use serde::de;
+#[cfg(feature = "serde_support")]
+use serde::de::{MapAccess, SeqAccess, Visitor};
+#[cfg(feature = "serde_support")]
+use serde::ser::SerializeStruct;
 use std;
 use std::cmp;
+use std::fmt;
 use std::fmt::Debug;
+#[cfg(feature = "serde_support")]
+use std::marker::PhantomData;
 use std::ops::{Add, AddAssign, Div, Sub};
 
 // The adapter describes how an object can be inserted into an intrusive
@@ -24,7 +35,6 @@ intrusive_adapter!(EntryAdapter<T> = Box<Entry<T>>:
 
 
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 struct Entry<T: Copy> {
     link: LinkedListLink,
     v: T,
@@ -48,7 +58,6 @@ where
 
 /// A structure to provide approximate quantiles queries in bounded memory and
 /// with bounded error.
-#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct CKMS<T: Copy> {
     n: usize,
 
@@ -77,6 +86,256 @@ pub struct CKMS<T: Copy> {
     sum: Option<T>,
     cma: Option<f64>,
     last_in: Option<T>,
+}
+
+#[cfg(feature = "serde_support")]
+impl<'de, T> Deserialize<'de> for CKMS<T>
+where
+    T: Copy + Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<CKMS<T>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(field_identifier, rename_all = "snake_case")]
+        enum Field {
+            N,
+            InsertThreshold,
+            Inserts,
+            Error,
+            Samples,
+            TotalSamples,
+            Sum,
+            Cma,
+            LastIn,
+        };
+
+        struct CKMSVisitor<T> {
+            phantom: PhantomData<T>,
+        }
+
+        impl<'de, T> Visitor<'de> for CKMSVisitor<T>
+        where
+            T: Copy + Deserialize<'de>,
+        {
+            type Value = CKMS<T>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("struct Duration")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<CKMS<T>, V::Error>
+            where
+                V: SeqAccess<'de>,
+                T: Deserialize<'de>,
+            {
+                let n = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                let insert_threshold = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
+                let inserts = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
+                let error = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(3, &self))?;
+                let total_samples = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(4, &self))?;
+                let sum = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(5, &self))?;
+                let cma = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(6, &self))?;
+                let last_in = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(7, &self))?;
+                let enc_samples: Vec<(T, usize, usize)> = seq.next_element()?
+                    .ok_or_else(|| de::Error::invalid_length(8, &self))?;
+                let mut samples: LinkedList<EntryAdapter<T>> = LinkedList::new(EntryAdapter::new());
+                for enc in enc_samples {
+                    samples.push_back(Box::new(Entry::new(enc.0, enc.1, enc.2)));
+                }
+                Ok(CKMS {
+                    n: n,
+                    insert_threshold: insert_threshold,
+                    inserts: inserts,
+                    error: error,
+                    samples: samples,
+                    total_samples: total_samples,
+                    sum: sum,
+                    cma: cma,
+                    last_in: last_in,
+                })
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<CKMS<T>, V::Error>
+            where
+                V: MapAccess<'de>,
+                T: Deserialize<'de>,
+            {
+                let mut n = None;
+                let mut insert_threshold = None;
+                let mut inserts = None;
+                let mut error = None;
+                let mut samples = None;
+                let mut total_samples = None;
+                let mut sum = None;
+                let mut cma = None;
+                let mut last_in = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::N => {
+                            if n.is_some() {
+                                return Err(de::Error::duplicate_field("n"));
+                            }
+                            n = Some(map.next_value()?);
+                        }
+                        Field::InsertThreshold => {
+                            if insert_threshold.is_some() {
+                                return Err(de::Error::duplicate_field("insert_threshold"));
+                            }
+                            insert_threshold = Some(map.next_value()?);
+                        }
+                        Field::Inserts => {
+                            if inserts.is_some() {
+                                return Err(de::Error::duplicate_field("inserts"));
+                            }
+                            inserts = Some(map.next_value()?);
+                        }
+                        Field::Error => {
+                            if error.is_some() {
+                                return Err(de::Error::duplicate_field("error"));
+                            }
+                            error = Some(map.next_value()?);
+                        }
+                        Field::Samples => {
+                            if samples.is_some() {
+                                return Err(de::Error::duplicate_field("samples"));
+                            }
+                            samples = Some(map.next_value()?);
+                        }
+                        Field::TotalSamples => {
+                            if total_samples.is_some() {
+                                return Err(de::Error::duplicate_field("total_samples"));
+                            }
+                            total_samples = Some(map.next_value()?);
+                        }
+                        Field::Sum => {
+                            if sum.is_some() {
+                                return Err(de::Error::duplicate_field("sum"));
+                            }
+                            sum = Some(map.next_value()?);
+                        }
+                        Field::Cma => {
+                            if cma.is_some() {
+                                return Err(de::Error::duplicate_field("cma"));
+                            }
+                            cma = Some(map.next_value()?);
+                        }
+                        Field::LastIn => {
+                            if last_in.is_some() {
+                                return Err(de::Error::duplicate_field("last_in"));
+                            }
+                            last_in = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let n = n.ok_or_else(|| de::Error::missing_field("n"))?;
+                let insert_threshold =
+                    insert_threshold.ok_or_else(|| de::Error::missing_field("insert_threshold"))?;
+                let inserts = inserts.ok_or_else(|| de::Error::missing_field("inserts"))?;
+                let error = error.ok_or_else(|| de::Error::missing_field("error"))?;
+                let enc_samples: Vec<(T, usize, usize)> =
+                    samples.ok_or_else(|| de::Error::missing_field("samples"))?;
+                let mut samples: LinkedList<EntryAdapter<T>> = LinkedList::new(EntryAdapter::new());
+                for enc in enc_samples {
+                    samples.push_back(Box::new(Entry::new(enc.0, enc.1, enc.2)));
+                }
+                let total_samples =
+                    total_samples.ok_or_else(|| de::Error::missing_field("total_samples"))?;
+                let sum = sum.ok_or_else(|| de::Error::missing_field("sum"))?;
+                let cma = cma.ok_or_else(|| de::Error::missing_field("cma"))?;
+                let last_in = last_in.ok_or_else(|| de::Error::missing_field("last_in"))?;
+                Ok(CKMS {
+                    n: n,
+                    insert_threshold: insert_threshold,
+                    inserts: inserts,
+                    error: error,
+                    samples: samples,
+                    total_samples: total_samples,
+                    sum: sum,
+                    cma: cma,
+                    last_in: last_in,
+                })
+            }
+        }
+
+        const FIELDS: &'static [&'static str] = &[
+            "n",
+            "insert_threshold",
+            "inserts",
+            "error",
+            "samples",
+            "total_samples",
+            "sum",
+            "cma",
+            "last_in",
+        ];
+        deserializer.deserialize_struct(
+            "CKMS",
+            FIELDS,
+            CKMSVisitor {
+                phantom: PhantomData,
+            },
+        )
+    }
+}
+
+#[cfg(feature = "serde_support")]
+impl<T> Serialize for CKMS<T>
+where
+    T: Copy + Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("CKMS", 9)?;
+        state.serialize_field("n", &self.n)?;
+        state.serialize_field("insert_threshold", &self.insert_threshold)?;
+        state.serialize_field("inserts", &self.inserts)?;
+        state.serialize_field("error", &self.error)?;
+        state.serialize_field("total_samples", &self.total_samples)?;
+        state.serialize_field("sum", &self.sum)?;
+        state.serialize_field("cma", &self.cma)?;
+        state.serialize_field("last_in", &self.last_in)?;
+        let samples: Vec<(T, usize, usize)> = self.samples
+            .iter()
+            .map(|ent| (ent.v, ent.g, ent.delta))
+            .collect();
+        state.serialize_field("samples", &samples)?;
+        state.end()
+    }
+}
+
+impl<T> fmt::Debug for CKMS<T>
+where
+    T: Copy + fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "CKMS {{ error: {}, sum: {:?}, cma: {:?}, count: {}, ",
+            self.error,
+            self.sum,
+            self.cma,
+            self.n
+        )?;
+        write!(f, "samples: [")?;
+        let mut cursor = self.samples.front();
+        for _ in 0..self.total_samples {
+            write!(f, "{:?}, ", cursor.get().unwrap())?;
+            cursor.move_next();
+        }
+        write!(f, "] }}")
+    }
 }
 
 impl<T> AddAssign for CKMS<T>
