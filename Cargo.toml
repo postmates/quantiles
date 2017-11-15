@@ -18,6 +18,7 @@ lto = true
 quickcheck = "0.4"
 
 [dependencies]
+intrusive-collections = "0.7.0"
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 
