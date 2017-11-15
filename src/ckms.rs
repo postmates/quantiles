@@ -11,15 +11,16 @@
 //! authors correct in their "Space- and Time-Efficient Deterministic Algorithms
 //! for Biased Quantiles over Data Streams"
 
+use intrusive_collections::{LinkedList, LinkedListLink};
 use std;
 use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Div, Sub};
-use intrusive_collections::{LinkedList, LinkedListLink};
 
 // The adapter describes how an object can be inserted into an intrusive
 // collection. This is automatically generated using a macro.
-intrusive_adapter!(EntryAdapter<T> = Box<Entry<T>>: Entry<T> { link: LinkedListLink } where T: Copy);
+intrusive_adapter!(EntryAdapter<T> = Box<Entry<T>>:
+                   Entry<T> { link: LinkedListLink } where T: Copy);
 
 
 #[derive(Debug, Clone)]
@@ -31,7 +32,10 @@ struct Entry<T: Copy> {
     delta: usize,
 }
 
-impl<T> Entry<T> where T: Copy {
+impl<T> Entry<T>
+where
+    T: Copy,
+{
     fn new(v: T, g: usize, delta: usize) -> Entry<T> {
         Entry {
             link: LinkedListLink::new(),
@@ -254,11 +258,10 @@ impl<
 
     fn priv_insert(&mut self, v: T) {
         let s = self.total_samples;
+        self.n += 1;
+        self.total_samples += 1;
         if s == 0 {
-            self.samples.push_front(
-                Box::new(Entry::new(v, 1, 0))
-            );
-            self.n += 1;
+            self.samples.push_front(Box::new(Entry::new(v, 1, 0)));
             return;
         }
 
@@ -278,7 +281,7 @@ impl<
             }
             invariant(r as f64, self.error) - 1
         };
-        
+
         let entry = Box::new(Entry::new(v, 1, delta));
         if idx == 0 {
             self.samples.push_front(entry);
@@ -292,8 +295,6 @@ impl<
             }
             cursor.insert_after(entry);
         }
-        self.n += 1;
-        self.total_samples += 1;
         self.inserts = (self.inserts + 1) % self.insert_threshold;
         if self.inserts == 0 {
             self.compress();
@@ -322,32 +323,37 @@ impl<
     /// assert_eq!(ckms.query(0.998), Some((998, 997)));
     /// assert_eq!(ckms.query(1.0), Some((1000, 999)));
     /// ```
-    pub fn query(&self, _q: f64) -> Option<(usize, T)> {
-        // let s = self.total_samples;
+    pub fn query(&self, q: f64) -> Option<(usize, T)> {
+        let s = self.total_samples;
 
-        // if s == 0 {
-        //     return None;
-        // }
+        if s == 0 {
+            return None;
+        }
 
-        // let mut r = 0;
-        // let nphi = q * (self.n as f64);
-        // for i in 1..s {
-        //     let prev = &self.samples[i - 1];
-        //     let cur = &self.samples[i];
+        {
+            let mut cursor = self.samples.front();
 
-        //     r += prev.g;
+            let mut r = 0;
+            let nphi = q * (self.n as f64);
 
-        //     let lhs = (r + cur.g + cur.delta) as f64;
-        //     let rhs = nphi + ((self.invariant(nphi) as f64) / 2.0);
+            for _ in 1..s {
+                let prev = cursor.get().unwrap();
+                cursor.move_next();
+                let cur = cursor.get().unwrap();
 
-        //     if lhs > rhs {
-        //         return Some((r, prev.v));
-        //     }
-        // }
+                r += prev.g;
 
-        // let v = self.samples[s - 1].v;
-        // Some((s, v))
-        None
+                let lhs = (r + cur.g + cur.delta) as f64;
+                let rhs = nphi + ((invariant(nphi, self.error) as f64) / 2.0);
+
+                if lhs > rhs {
+                    return Some((r, prev.v));
+                }
+            }
+        }
+
+        let v = self.samples.back().get().unwrap().v;
+        Some((s, v))
     }
 
     /// Query CKMS for the count of its points
@@ -395,16 +401,16 @@ impl<
         if self.total_samples < 3 {
             return;
         }
-        let mut cursor = self.samples.cursor_mut();
+        let mut cursor = self.samples.front_mut();
         if cursor.is_null() {
             return;
         }
 
-        let mut s_mx = self.total_samples - 1;
         let mut i = 0;
         let mut r: f64 = 1.0;
-        loop {
-            let cur_g = cursor.get().unwrap().g;
+        while i < (self.total_samples - 1) {
+            let cur = cursor.get().unwrap();
+            let cur_g = cur.g;
             cursor.move_next();
             let nxt = cursor.get().unwrap();
             let nxt_v = nxt.v;
@@ -417,15 +423,13 @@ impl<
                 cursor.replace_with(entry).unwrap();
                 cursor.move_next();
                 cursor.remove().unwrap();
-                s_mx -= 1;
+                cursor.move_prev();
+                self.total_samples -= 1;
             } else {
+                cursor.move_next();
                 i += 1;
             }
             r += 1.0;
-
-            if i == s_mx {
-                break;
-            }
         }
     }
 }
@@ -664,127 +668,130 @@ mod test {
             .quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
     }
 
-    // #[test]
-    // fn insert_test() {
-    //     let mut ckms = CKMS::<f64>::new(0.001);
-    //     for i in 0..2 {
-    //         ckms.insert(i as f64);
-    //     }
+    // prop: v_i-1 < v_i =< v_i+1
+    #[test]
+    fn asc_samples_test() {
+        fn asc_samples(fs: Vec<i32>) -> TestResult {
+            let mut ckms = CKMS::<i32>::new(0.001);
+            let fs_len = fs.len();
+            for f in fs {
+                ckms.insert(f);
+            }
 
-    //     assert_eq!(0.0, ckms.samples[0].v);
-    //     assert_eq!(1.0, ckms.samples[1].v);
-    // }
+            if ckms.total_samples == 0 && fs_len == 0 {
+                return TestResult::passed();
+            }
 
+            let mut cursor = ckms.samples.front();
+            if cursor.is_null() {
+                return TestResult::failed();
+            }
 
-    // // prop: v_i-1 < v_i =< v_i+1
-    // #[test]
-    // fn asc_samples_test() {
-    //     fn asc_samples(fs: Vec<i32>) -> TestResult {
-    //         let mut ckms = CKMS::<i32>::new(0.001);
-    //         let fsc = fs.clone();
-    //         for f in fs {
-    //             ckms.insert(f);
-    //         }
+            for _ in 0..ckms.total_samples {
+                let cur = cursor.get().unwrap();
+                cursor.move_next();
+                if cursor.is_null() {
+                    break;
+                }
+                let nxt = cursor.get().unwrap();
 
-    //         if ckms.samples.len() == 0 && fsc.len() == 0 {
-    //             return TestResult::passed();
-    //         }
-    //         let mut cur = ckms.samples[0].v;
-    //         for ent in ckms.samples {
-    //             let s = ent.v;
-    //             if s < cur {
-    //                 return TestResult::failed();
-    //             }
-    //             cur = s;
-    //         }
-    //         TestResult::passed()
-    //     }
-    //     QuickCheck::new()
-    //         .tests(10000)
-    //         .max_tests(100000)
-    //         .quickcheck(asc_samples as fn(Vec<i32>) -> TestResult);
-    // }
+                if !(cur.v <= nxt.v) {
+                    return TestResult::failed();
+                }
+            }
+            TestResult::passed()
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(asc_samples as fn(Vec<i32>) -> TestResult);
+    }
 
-    // // prop: forall i. g_i + delta_i =< f(r_i, n)
-    // #[test]
-    // fn f_invariant_test() {
-    //     fn f_invariant(fs: Vec<i32>) -> TestResult {
-    //         let mut ckms = CKMS::<i32>::new(0.001);
-    //         for f in fs {
-    //             ckms.insert(f);
-    //         }
+    // prop: forall i. g_i + delta_i =< f(r_i, n)
+    #[test]
+    fn f_invariant_test() {
+        fn f_invariant(fs: Vec<i32>) -> TestResult {
+            let error = 0.001;
+            let mut ckms = CKMS::<i32>::new(error);
+            let fs_len = fs.len();
+            for f in fs {
+                ckms.insert(f);
+            }
 
-    //         let s = ckms.samples.len();
-    //         let mut r = 0;
-    //         for i in 1..s {
-    //             let ref prev = ckms.samples[i - 1];
-    //             let ref cur = ckms.samples[i];
+            if ckms.total_samples == 0 && fs_len == 0 {
+                return TestResult::passed();
+            }
+            let mut cursor = ckms.samples.front();
+            if cursor.is_null() {
+                return TestResult::failed();
+            }
+            let mut r = 0;
+            for _ in 0..ckms.total_samples {
+                let ref cur = cursor.get().unwrap();
 
-    //             r += prev.g;
+                r += cur.g;
 
-    //             let res = (cur.g + cur.delta) <= ckms.invariant(r as f64);
-    //             if !res {
-    //                 println!("{:?} <= {:?}", cur.g + cur.delta, ckms.invariant(r as f64));
-    //                 println!("samples: {:?}", ckms.samples);
-    //                 return TestResult::failed();
-    //             }
-    //         }
-    //         TestResult::passed()
-    //     }
-    //     QuickCheck::new()
-    //         .tests(10000)
-    //         .max_tests(100000)
-    //         .quickcheck(f_invariant as fn(Vec<i32>) -> TestResult);
-    // }
+                if !((cur.g + cur.delta) <= invariant(r as f64, error)) {
+                    return TestResult::failed();
+                }
+                cursor.move_next();
+            }
+            TestResult::passed()
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(f_invariant as fn(Vec<i32>) -> TestResult);
+    }
 
-    // #[test]
-    // fn compression_test() {
-    //     let mut ckms = CKMS::<i32>::new(0.1);
-    //     for i in 1..10000 {
-    //         ckms.insert(i);
-    //     }
-    //     ckms.compress();
+    #[test]
+    fn compression_test() {
+        let mut ckms = CKMS::<i32>::new(0.1);
+        for i in 1..10000 {
+            ckms.insert(i);
+        }
+        ckms.compress();
 
-    //     let l = ckms.samples.len();
-    //     let n = ckms.count();
-    //     assert_eq!(9999, n);
-    //     assert_eq!(316, l);
-    // }
+        let l = ckms.total_samples;
+        let n = ckms.count();
+        assert_eq!(9999, n);
+        assert_eq!(316, l);
+    }
 
-    // // prop: post-compression, samples is bounded above by O(1/e log^2 en)
-    // #[test]
-    // fn compression_bound_test() {
-    //     fn compression_bound(fs: Vec<i32>) -> TestResult {
-    //         if fs.len() < 15 {
-    //             return TestResult::discard();
-    //         }
+    // prop: post-compression, samples is bounded above by O(1/e log^2 en)
+    #[test]
+    fn compression_bound_test() {
+        fn compression_bound(fs: Vec<i32>) -> TestResult {
+            if fs.len() < 15 {
+                return TestResult::discard();
+            }
 
-    //         let mut ckms = CKMS::<i32>::new(0.001);
-    //         for f in fs {
-    //             ckms.insert(f);
-    //         }
-    //         ckms.compress();
+            let mut ckms = CKMS::<i32>::new(0.001);
+            for f in fs {
+                ckms.insert(f);
+            }
+            ckms.compress();
 
-    //         let s = ckms.samples.len() as f64;
-    //         let bound = (1.0 / ckms.error) * (ckms.error * (ckms.count() as f64)).log10().powi(2);
+            let s = ckms.total_samples as f64;
+            let bound = (1.0 / ckms.error) * (ckms.error * (ckms.count() as f64)).log10().powi(2);
 
-    //         if !(s <= bound) {
-    //             println!(
-    //                 "error: {:?} n: {:?} log10: {:?}",
-    //                 ckms.error,
-    //                 ckms.count() as f64,
-    //                 (ckms.error * (ckms.count() as f64)).log10().powi(2)
-    //             );
-    //             println!("{:?} <= {:?}", s, bound);
-    //             return TestResult::failed();
-    //         }
-    //         TestResult::passed()
-    //     }
-    //     QuickCheck::new()
-    //         .tests(10000)
-    //         .max_tests(100000)
-    //         .quickcheck(compression_bound as fn(Vec<i32>) -> TestResult);
-    // }
+            if !(s <= bound) {
+                println!(
+                    "error: {:?} n: {:?} log10: {:?}",
+                    ckms.error,
+                    ckms.count() as f64,
+                    (ckms.error * (ckms.count() as f64)).log10().powi(2)
+                );
+                println!("{:?} <= {:?}", s, bound);
+                return TestResult::failed();
+            }
+            TestResult::passed()
+        }
+        QuickCheck::new()
+            .tests(10000)
+            .max_tests(100000)
+            .quickcheck(compression_bound as fn(Vec<i32>) -> TestResult);
+    }
 
     #[test]
     fn test_basics() {
@@ -815,16 +822,5 @@ mod test {
         assert_eq!(ckms.query(0.95), Some((950, 950)));
         assert_eq!(ckms.query(0.99), Some((990, 990)));
         assert_eq!(ckms.query(1.00), Some((1000, 1000)));
-    }
-
-    #[test]
-    fn test_basics_float() {
-        let mut ckms = CKMS::<f64>::new(0.001);
-        for i in 1..1001 {
-            ckms.insert(i as f64);
-        }
-
-        assert_eq!(ckms.query(0.00), Some((1, 1.0)));
-        assert_eq!(ckms.query(1.00), Some((1000, 1000.0)));
     }
 }

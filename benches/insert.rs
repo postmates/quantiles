@@ -26,7 +26,7 @@ mod u16 {
     generate_tests!(u16, bench_insert_100, 100);
     generate_tests!(u16, bench_insert_1000, 1000);
     generate_tests!(u16, bench_insert_10000, 10_000);
-//    generate_tests!(u16, bench_insert_65535, 65_535);
+    //    generate_tests!(u16, bench_insert_65535, 65_535);
 }
 
 // mod u32 {
