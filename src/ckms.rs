@@ -377,7 +377,7 @@ impl<
 
         let mut s_mx = self.samples.len() - 1;
         let mut i = 0;
-        let mut r = 1;
+        let mut r: f64 = 1.0;
 
         loop {
             let cur_g = self.samples[i].g;
@@ -385,7 +385,7 @@ impl<
             let nxt_g = self.samples[i + 1].g;
             let nxt_delta = self.samples[i + 1].delta;
 
-            if cur_g + nxt_g + nxt_delta <= self.invariant(f64::from(r)) {
+            if cur_g + nxt_g + nxt_delta <= self.invariant(r) {
                 let ent = Entry {
                     v: nxt_v,
                     g: nxt_g + cur_g,
@@ -397,7 +397,7 @@ impl<
             } else {
                 i += 1;
             }
-            r += 1;
+            r += 1.0;
 
             if i == s_mx {
                 break;
