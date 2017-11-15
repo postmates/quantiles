@@ -19,9 +19,6 @@ extern crate serde_derive;
 #[cfg(feature = "serde_support")]
 extern crate serde;
 
-#[macro_use]
-extern crate intrusive_collections;
-
 pub mod misra_gries;
 pub mod greenwald_khanna;
 pub mod ckms;

@@ -11,53 +11,23 @@
 //! authors correct in their "Space- and Time-Efficient Deterministic Algorithms
 //! for Biased Quantiles over Data Streams"
 
-use intrusive_collections::{LinkedList, LinkedListLink};
-#[cfg(feature = "serde_support")]
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-#[cfg(feature = "serde_support")]
-use serde::de;
-#[cfg(feature = "serde_support")]
-use serde::de::{MapAccess, SeqAccess, Visitor};
-#[cfg(feature = "serde_support")]
-use serde::ser::SerializeStruct;
 use std;
 use std::cmp;
-use std::fmt;
 use std::fmt::Debug;
-#[cfg(feature = "serde_support")]
-use std::marker::PhantomData;
 use std::ops::{Add, AddAssign, Div, Sub};
 
-// The adapter describes how an object can be inserted into an intrusive
-// collection. This is automatically generated using a macro.
-intrusive_adapter!(EntryAdapter<T> = Box<Entry<T>>:
-                   Entry<T> { link: LinkedListLink } where T: Copy);
-
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 struct Entry<T: Copy> {
-    link: LinkedListLink,
     v: T,
     g: usize,
     delta: usize,
 }
 
-impl<T> Entry<T>
-where
-    T: Copy,
-{
-    fn new(v: T, g: usize, delta: usize) -> Entry<T> {
-        Entry {
-            link: LinkedListLink::new(),
-            v: v,
-            g: g,
-            delta: delta,
-        }
-    }
-}
-
 /// A structure to provide approximate quantiles queries in bounded memory and
 /// with bounded error.
+#[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct CKMS<T: Copy> {
     n: usize,
 
@@ -80,262 +50,11 @@ pub struct CKMS<T: Copy> {
     // occasionally merged. The outlined implementation uses a linked list but
     // we prefer a Vec for reasons of cache locality at the cost of worse
     // computational complexity.
-    samples: LinkedList<EntryAdapter<T>>,
-    total_samples: usize,
+    samples: Vec<Entry<T>>,
 
     sum: Option<T>,
     cma: Option<f64>,
     last_in: Option<T>,
-}
-
-#[cfg(feature = "serde_support")]
-impl<'de, T> Deserialize<'de> for CKMS<T>
-where
-    T: Copy + Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<CKMS<T>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "snake_case")]
-        enum Field {
-            N,
-            InsertThreshold,
-            Inserts,
-            Error,
-            Samples,
-            TotalSamples,
-            Sum,
-            Cma,
-            LastIn,
-        };
-
-        struct CKMSVisitor<T> {
-            phantom: PhantomData<T>,
-        }
-
-        impl<'de, T> Visitor<'de> for CKMSVisitor<T>
-        where
-            T: Copy + Deserialize<'de>,
-        {
-            type Value = CKMS<T>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct Duration")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<CKMS<T>, V::Error>
-            where
-                V: SeqAccess<'de>,
-                T: Deserialize<'de>,
-            {
-                let n = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let insert_threshold = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let inserts = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                let error = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(3, &self))?;
-                let total_samples = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(4, &self))?;
-                let sum = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(5, &self))?;
-                let cma = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(6, &self))?;
-                let last_in = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(7, &self))?;
-                let enc_samples: Vec<(T, usize, usize)> = seq.next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(8, &self))?;
-                let mut samples: LinkedList<EntryAdapter<T>> = LinkedList::new(EntryAdapter::new());
-                for enc in enc_samples {
-                    samples.push_back(Box::new(Entry::new(enc.0, enc.1, enc.2)));
-                }
-                Ok(CKMS {
-                    n: n,
-                    insert_threshold: insert_threshold,
-                    inserts: inserts,
-                    error: error,
-                    samples: samples,
-                    total_samples: total_samples,
-                    sum: sum,
-                    cma: cma,
-                    last_in: last_in,
-                })
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<CKMS<T>, V::Error>
-            where
-                V: MapAccess<'de>,
-                T: Deserialize<'de>,
-            {
-                let mut n = None;
-                let mut insert_threshold = None;
-                let mut inserts = None;
-                let mut error = None;
-                let mut samples = None;
-                let mut total_samples = None;
-                let mut sum = None;
-                let mut cma = None;
-                let mut last_in = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::N => {
-                            if n.is_some() {
-                                return Err(de::Error::duplicate_field("n"));
-                            }
-                            n = Some(map.next_value()?);
-                        }
-                        Field::InsertThreshold => {
-                            if insert_threshold.is_some() {
-                                return Err(de::Error::duplicate_field("insert_threshold"));
-                            }
-                            insert_threshold = Some(map.next_value()?);
-                        }
-                        Field::Inserts => {
-                            if inserts.is_some() {
-                                return Err(de::Error::duplicate_field("inserts"));
-                            }
-                            inserts = Some(map.next_value()?);
-                        }
-                        Field::Error => {
-                            if error.is_some() {
-                                return Err(de::Error::duplicate_field("error"));
-                            }
-                            error = Some(map.next_value()?);
-                        }
-                        Field::Samples => {
-                            if samples.is_some() {
-                                return Err(de::Error::duplicate_field("samples"));
-                            }
-                            samples = Some(map.next_value()?);
-                        }
-                        Field::TotalSamples => {
-                            if total_samples.is_some() {
-                                return Err(de::Error::duplicate_field("total_samples"));
-                            }
-                            total_samples = Some(map.next_value()?);
-                        }
-                        Field::Sum => {
-                            if sum.is_some() {
-                                return Err(de::Error::duplicate_field("sum"));
-                            }
-                            sum = Some(map.next_value()?);
-                        }
-                        Field::Cma => {
-                            if cma.is_some() {
-                                return Err(de::Error::duplicate_field("cma"));
-                            }
-                            cma = Some(map.next_value()?);
-                        }
-                        Field::LastIn => {
-                            if last_in.is_some() {
-                                return Err(de::Error::duplicate_field("last_in"));
-                            }
-                            last_in = Some(map.next_value()?);
-                        }
-                    }
-                }
-                let n = n.ok_or_else(|| de::Error::missing_field("n"))?;
-                let insert_threshold =
-                    insert_threshold.ok_or_else(|| de::Error::missing_field("insert_threshold"))?;
-                let inserts = inserts.ok_or_else(|| de::Error::missing_field("inserts"))?;
-                let error = error.ok_or_else(|| de::Error::missing_field("error"))?;
-                let enc_samples: Vec<(T, usize, usize)> =
-                    samples.ok_or_else(|| de::Error::missing_field("samples"))?;
-                let mut samples: LinkedList<EntryAdapter<T>> = LinkedList::new(EntryAdapter::new());
-                for enc in enc_samples {
-                    samples.push_back(Box::new(Entry::new(enc.0, enc.1, enc.2)));
-                }
-                let total_samples =
-                    total_samples.ok_or_else(|| de::Error::missing_field("total_samples"))?;
-                let sum = sum.ok_or_else(|| de::Error::missing_field("sum"))?;
-                let cma = cma.ok_or_else(|| de::Error::missing_field("cma"))?;
-                let last_in = last_in.ok_or_else(|| de::Error::missing_field("last_in"))?;
-                Ok(CKMS {
-                    n: n,
-                    insert_threshold: insert_threshold,
-                    inserts: inserts,
-                    error: error,
-                    samples: samples,
-                    total_samples: total_samples,
-                    sum: sum,
-                    cma: cma,
-                    last_in: last_in,
-                })
-            }
-        }
-
-        const FIELDS: &'static [&'static str] = &[
-            "n",
-            "insert_threshold",
-            "inserts",
-            "error",
-            "samples",
-            "total_samples",
-            "sum",
-            "cma",
-            "last_in",
-        ];
-        deserializer.deserialize_struct(
-            "CKMS",
-            FIELDS,
-            CKMSVisitor {
-                phantom: PhantomData,
-            },
-        )
-    }
-}
-
-#[cfg(feature = "serde_support")]
-impl<T> Serialize for CKMS<T>
-where
-    T: Copy + Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("CKMS", 9)?;
-        state.serialize_field("n", &self.n)?;
-        state.serialize_field("insert_threshold", &self.insert_threshold)?;
-        state.serialize_field("inserts", &self.inserts)?;
-        state.serialize_field("error", &self.error)?;
-        state.serialize_field("total_samples", &self.total_samples)?;
-        state.serialize_field("sum", &self.sum)?;
-        state.serialize_field("cma", &self.cma)?;
-        state.serialize_field("last_in", &self.last_in)?;
-        let samples: Vec<(T, usize, usize)> = self.samples
-            .iter()
-            .map(|ent| (ent.v, ent.g, ent.delta))
-            .collect();
-        state.serialize_field("samples", &samples)?;
-        state.end()
-    }
-}
-
-impl<T> fmt::Debug for CKMS<T>
-where
-    T: Copy + fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "CKMS {{ error: {}, sum: {:?}, cma: {:?}, count: {}, ",
-            self.error,
-            self.sum,
-            self.cma,
-            self.n
-        )?;
-        write!(f, "samples: [")?;
-        let mut cursor = self.samples.front();
-        for _ in 0..self.total_samples {
-            write!(f, "{:?}, ", cursor.get().unwrap())?;
-            cursor.move_next();
-        }
-        write!(f, "] }}")
-    }
 }
 
 impl<T> AddAssign for CKMS<T>
@@ -369,16 +88,6 @@ where
         for smpl in rhs.samples {
             self.priv_insert(smpl.v);
         }
-    }
-}
-
-#[inline]
-fn invariant(r: f64, error: f64) -> usize {
-    let i = (2.0 * error * r).floor() as usize;
-    if i == 0 {
-        1
-    } else {
-        i
     }
 }
 
@@ -441,8 +150,7 @@ impl<
             insert_threshold: insert_threshold,
             inserts: 0,
 
-            samples: LinkedList::new(EntryAdapter::new()),
-            total_samples: 0,
+            samples: Vec::<Entry<T>>::new(),
 
             last_in: None,
             sum: None,
@@ -516,16 +224,23 @@ impl<
     }
 
     fn priv_insert(&mut self, v: T) {
-        let s = self.total_samples;
-        self.n += 1;
-        self.total_samples += 1;
+        let s = self.samples.len();
         if s == 0 {
-            self.samples.push_front(Box::new(Entry::new(v, 1, 0)));
+            self.samples.insert(
+                0,
+                Entry {
+                    v: v,
+                    g: 1,
+                    delta: 0,
+                },
+            );
+            self.n += 1;
             return;
         }
 
         let mut idx = 0;
-        for smpl in self.samples.iter() {
+        for i in 0..s {
+            let smpl = &self.samples[i];
             match smpl.v.partial_cmp(&v).unwrap() {
                 cmp::Ordering::Less => idx += 1,
                 _ => break,
@@ -535,25 +250,20 @@ impl<
             0
         } else {
             let mut r = 0;
-            for smpl in self.samples.iter().take(idx) {
+            for smpl in &self.samples[..idx] {
                 r += smpl.g;
             }
-            invariant(r as f64, self.error) - 1
+            self.invariant(r as f64) - 1
         };
-
-        let entry = Box::new(Entry::new(v, 1, delta));
-        if idx == 0 {
-            self.samples.push_front(entry);
-        } else if idx == s {
-            self.samples.push_back(entry);
-        } else {
-            let mut cursor = self.samples.cursor_mut();
-            // wind the cursor forward
-            for _ in 0..idx {
-                cursor.move_next();
-            }
-            cursor.insert_after(entry);
-        }
+        self.samples.insert(
+            idx,
+            Entry {
+                v: v,
+                g: 1,
+                delta: delta,
+            },
+        );
+        self.n += 1;
         self.inserts = (self.inserts + 1) % self.insert_threshold;
         if self.inserts == 0 {
             self.compress();
@@ -583,35 +293,29 @@ impl<
     /// assert_eq!(ckms.query(1.0), Some((1000, 999)));
     /// ```
     pub fn query(&self, q: f64) -> Option<(usize, T)> {
-        let s = self.total_samples;
+        let s = self.samples.len();
 
         if s == 0 {
             return None;
         }
 
-        {
-            let mut cursor = self.samples.front();
+        let mut r = 0;
+        let nphi = q * (self.n as f64);
+        for i in 1..s {
+            let prev = &self.samples[i - 1];
+            let cur = &self.samples[i];
 
-            let mut r = 0;
-            let nphi = q * (self.n as f64);
+            r += prev.g;
 
-            for _ in 1..s {
-                let prev = cursor.get().unwrap();
-                cursor.move_next();
-                let cur = cursor.get().unwrap();
+            let lhs = (r + cur.g + cur.delta) as f64;
+            let rhs = nphi + ((self.invariant(nphi) as f64) / 2.0);
 
-                r += prev.g;
-
-                let lhs = (r + cur.g + cur.delta) as f64;
-                let rhs = nphi + ((invariant(nphi, self.error) as f64) / 2.0);
-
-                if lhs > rhs {
-                    return Some((r, prev.v));
-                }
+            if lhs > rhs {
+                return Some((r, prev.v));
             }
         }
 
-        let v = self.samples.back().get().unwrap().v;
+        let v = self.samples[s - 1].v;
         Some((s, v))
     }
 
@@ -656,39 +360,48 @@ impl<
         self.samples.into_iter().map(|ent| ent.v).collect()
     }
 
-    fn compress(&mut self) {
-        if self.total_samples < 3 {
-            return;
+    #[inline]
+    fn invariant(&self, r: f64) -> usize {
+        let i = (2.0 * self.error * r).floor() as usize;
+        if i == 0 {
+            1
+        } else {
+            i
         }
-        let mut cursor = self.samples.front_mut();
-        if cursor.is_null() {
+    }
+
+    fn compress(&mut self) {
+        if self.samples.len() < 3 {
             return;
         }
 
+        let mut s_mx = self.samples.len() - 1;
         let mut i = 0;
         let mut r: f64 = 1.0;
-        while i < (self.total_samples - 1) {
-            let cur = cursor.get().unwrap();
-            let cur_g = cur.g;
-            cursor.move_next();
-            let nxt = cursor.get().unwrap();
-            let nxt_v = nxt.v;
-            let nxt_g = nxt.g;
-            let nxt_delta = nxt.delta;
-            cursor.move_prev();
 
-            if cur_g + nxt_g + nxt_delta <= invariant(r, self.error) {
-                let entry = Box::new(Entry::new(nxt_v, nxt_g + cur_g, nxt_delta));
-                cursor.replace_with(entry).unwrap();
-                cursor.move_next();
-                cursor.remove().unwrap();
-                cursor.move_prev();
-                self.total_samples -= 1;
+        loop {
+            let cur_g = self.samples[i].g;
+            let nxt_v = self.samples[i + 1].v;
+            let nxt_g = self.samples[i + 1].g;
+            let nxt_delta = self.samples[i + 1].delta;
+
+            if cur_g + nxt_g + nxt_delta <= self.invariant(r) {
+                let ent = Entry {
+                    v: nxt_v,
+                    g: nxt_g + cur_g,
+                    delta: nxt_delta,
+                };
+                self.samples[i] = ent;
+                self.samples.remove(i + 1);
+                s_mx -= 1;
             } else {
-                cursor.move_next();
                 i += 1;
             }
             r += 1.0;
+
+            if i == s_mx {
+                break;
+            }
         }
     }
 }
@@ -904,8 +617,7 @@ mod test {
 
             let phi = (1.0 / (1.0 + E.powf(f.abs()))) * 2.0;
 
-            let error = 0.001;
-            let mut ckms = CKMS::<i32>::new(error);
+            let mut ckms = CKMS::<i32>::new(0.001);
             for f in fs {
                 ckms.insert(f);
             }
@@ -914,7 +626,7 @@ mod test {
                 None => TestResult::passed(), // invariant to check here? n*phi + f > 1?
                 Some((rank, _)) => {
                     let nphi = phi * (ckms.n as f64);
-                    let fdiv2 = (invariant(nphi, error) as f64) / 2.0;
+                    let fdiv2 = (ckms.invariant(nphi) as f64) / 2.0;
                     TestResult::from_bool(
                         ((nphi - fdiv2) <= (rank as f64)) || ((rank as f64) <= (nphi + fdiv2)),
                     )
@@ -927,36 +639,38 @@ mod test {
             .quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
     }
 
+    #[test]
+    fn insert_test() {
+        let mut ckms = CKMS::<f64>::new(0.001);
+        for i in 0..2 {
+            ckms.insert(i as f64);
+        }
+
+        assert_eq!(0.0, ckms.samples[0].v);
+        assert_eq!(1.0, ckms.samples[1].v);
+    }
+
+
     // prop: v_i-1 < v_i =< v_i+1
     #[test]
     fn asc_samples_test() {
         fn asc_samples(fs: Vec<i32>) -> TestResult {
             let mut ckms = CKMS::<i32>::new(0.001);
-            let fs_len = fs.len();
+            let fsc = fs.clone();
             for f in fs {
                 ckms.insert(f);
             }
 
-            if ckms.total_samples == 0 && fs_len == 0 {
+            if ckms.samples.len() == 0 && fsc.len() == 0 {
                 return TestResult::passed();
             }
-
-            let mut cursor = ckms.samples.front();
-            if cursor.is_null() {
-                return TestResult::failed();
-            }
-
-            for _ in 0..ckms.total_samples {
-                let cur = cursor.get().unwrap();
-                cursor.move_next();
-                if cursor.is_null() {
-                    break;
-                }
-                let nxt = cursor.get().unwrap();
-
-                if !(cur.v <= nxt.v) {
+            let mut cur = ckms.samples[0].v;
+            for ent in ckms.samples {
+                let s = ent.v;
+                if s < cur {
                     return TestResult::failed();
                 }
+                cur = s;
             }
             TestResult::passed()
         }
@@ -970,30 +684,25 @@ mod test {
     #[test]
     fn f_invariant_test() {
         fn f_invariant(fs: Vec<i32>) -> TestResult {
-            let error = 0.001;
-            let mut ckms = CKMS::<i32>::new(error);
-            let fs_len = fs.len();
+            let mut ckms = CKMS::<i32>::new(0.001);
             for f in fs {
                 ckms.insert(f);
             }
 
-            if ckms.total_samples == 0 && fs_len == 0 {
-                return TestResult::passed();
-            }
-            let mut cursor = ckms.samples.front();
-            if cursor.is_null() {
-                return TestResult::failed();
-            }
+            let s = ckms.samples.len();
             let mut r = 0;
-            for _ in 0..ckms.total_samples {
-                let ref cur = cursor.get().unwrap();
+            for i in 1..s {
+                let ref prev = ckms.samples[i - 1];
+                let ref cur = ckms.samples[i];
 
-                r += cur.g;
+                r += prev.g;
 
-                if !((cur.g + cur.delta) <= invariant(r as f64, error)) {
+                let res = (cur.g + cur.delta) <= ckms.invariant(r as f64);
+                if !res {
+                    println!("{:?} <= {:?}", cur.g + cur.delta, ckms.invariant(r as f64));
+                    println!("samples: {:?}", ckms.samples);
                     return TestResult::failed();
                 }
-                cursor.move_next();
             }
             TestResult::passed()
         }
@@ -1011,7 +720,7 @@ mod test {
         }
         ckms.compress();
 
-        let l = ckms.total_samples;
+        let l = ckms.samples.len();
         let n = ckms.count();
         assert_eq!(9999, n);
         assert_eq!(316, l);
@@ -1031,7 +740,7 @@ mod test {
             }
             ckms.compress();
 
-            let s = ckms.total_samples as f64;
+            let s = ckms.samples.len() as f64;
             let bound = (1.0 / ckms.error) * (ckms.error * (ckms.count() as f64)).log10().powi(2);
 
             if !(s <= bound) {
