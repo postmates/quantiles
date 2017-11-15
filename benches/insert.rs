@@ -35,7 +35,7 @@ mod u32 {
     generate_tests!(u32, bench_insert_100, 100);
     generate_tests!(u32, bench_insert_1000, 1000);
     generate_tests!(u32, bench_insert_10000, 10_000);
-//     generate_tests!(u32, bench_insert_100000, 100_000);
+    generate_tests!(u32, bench_insert_100000, 100_000);
 //     generate_tests!(u32, bench_insert_1000000, 1_000_000);
 //     generate_tests!(u32, bench_insert_10000000, 10_000_000);
 //     generate_tests!(u32, bench_insert_100000000, 100_000_000);
