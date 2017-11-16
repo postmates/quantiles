@@ -525,19 +525,16 @@ impl<
         }
 
         let mut idx = 0;
+        let mut r = 0;
         for smpl in self.samples.iter() {
             match smpl.v.partial_cmp(&v).unwrap() {
-                cmp::Ordering::Less => idx += 1,
+                cmp::Ordering::Less => { idx += 1; r += smpl.g },
                 _ => break,
             }
         }
         let delta = if idx == 0 || idx == s {
             0
         } else {
-            let mut r = 0;
-            for smpl in self.samples.iter().take(idx) {
-                r += smpl.g;
-            }
             invariant(r as f64, self.error) - 1
         };
 
