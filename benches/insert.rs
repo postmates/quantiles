@@ -10,12 +10,12 @@ fn xorshift(seed: u64) -> (u64, u32) {
     // implementation inspired by
     // https://github.com/astocko/xorshift/blob/master/src/splitmix64.rs
     use std::num::Wrapping as w;
-    
+
     let mut z = w(seed) + w(0x9E3779B97F4A7C15_u64);
     let nxt_seed = z.0;
     z = (z ^ (z >> 30)) * w(0xBF58476D1CE4E5B9_u64);
     z = (z ^ (z >> 27)) * w(0x94D049BB133111EB_u64);
-    (nxt_seed, (z ^ (z >> 31)).0 as u32)
+    (nxt_seed, ((z ^ (z >> 31)).0 as u16) as u32)
 }
 
 macro_rules! generate_tests {
@@ -26,24 +26,24 @@ macro_rules! generate_tests {
             b.iter(|| {
                 let mut ckms = CKMS::<$t>::new(0.001);
                 for _ in 0..$s {
-                    ckms.insert(val);
+                    ckms.insert(val as $t);
                     let res = xorshift(seed);
                     seed = res.0;
                     val = res.1;
                 }
-            });
+             });
         }
     }
 }
 
-// mod u16 {
-//     use super::*;
+mod u16 {
+    use super::*;
 
-//     generate_tests!(u16, bench_insert_100, 100);
-//     generate_tests!(u16, bench_insert_1000, 1000);
-//     generate_tests!(u16, bench_insert_10000, 10_000);
-//     //    generate_tests!(u16, bench_insert_65535, 65_535);
-// }
+    generate_tests!(u16, bench_insert_100, 100);
+    generate_tests!(u16, bench_insert_1000, 1000);
+    generate_tests!(u16, bench_insert_10000, 10_000);
+    generate_tests!(u16, bench_insert_65535, 65_535);
+}
 
 mod u32 {
     use super::*;
@@ -52,7 +52,7 @@ mod u32 {
     generate_tests!(u32, bench_insert_1000, 1000);
     generate_tests!(u32, bench_insert_10000, 10_000);
     generate_tests!(u32, bench_insert_100000, 100_000);
-//     generate_tests!(u32, bench_insert_1000000, 1_000_000);
-//     generate_tests!(u32, bench_insert_10000000, 10_000_000);
-//     generate_tests!(u32, bench_insert_100000000, 100_000_000);
+    //     generate_tests!(u32, bench_insert_1000000, 1_000_000);
+    //     generate_tests!(u32, bench_insert_10000000, 10_000_000);
+    //     generate_tests!(u32, bench_insert_100000000, 100_000_000);
 }

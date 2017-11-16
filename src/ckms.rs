@@ -52,6 +52,11 @@ pub struct CKMS<T: Copy> {
     // computational complexity.
     samples: Vec<Entry<T>>,
 
+    // We take the 'Batch' approach described in the paper. New points are
+    // received into `insert_buffer` and are merged every 1/2 * error
+    // insertions. This trades-off for query time in favor of inserts.
+    insert_buffer: Vec<T>,
+
     sum: Option<T>,
     cma: Option<f64>,
     last_in: Option<T>,
@@ -85,9 +90,19 @@ where
                 Some(((x_n * x) + (y_n * y)) / (x_n + y_n))
             }
         };
-        for smpl in rhs.samples {
-            self.priv_insert(smpl.v);
-        }
+        let mut others: Vec<T> = rhs.samples.iter().map(|x| x.v).collect();
+        self.insert_buffer.append(&mut others);
+        self.merge();
+        self.compress();
+    }
+}
+
+fn invariant(r: f64, error: f64) -> usize {
+    let i = (2.0 * error * r).floor() as usize;
+    if i == 0 {
+        1
+    } else {
+        i
     }
 }
 
@@ -150,6 +165,7 @@ impl<
             insert_threshold: insert_threshold,
             inserts: 0,
 
+            insert_buffer: Vec::with_capacity(insert_threshold),
             samples: Vec::new(),
 
             last_in: None,
@@ -215,55 +231,58 @@ impl<
     pub fn insert(&mut self, v: T) {
         self.sum = self.sum.map_or(Some(v), |s| Some(s.add(v)));
         self.last_in = Some(v);
-        self.priv_insert(v);
-        // NOTE: priv_insert increases self.n.
+        self.n += 1;
         let v_f64: f64 = v.into();
-        let n: f64 = self.n as f64;
         self.cma = self.cma
-            .map_or(Some(v_f64), |s| Some(s + ((v_f64 - s) / n)));
+            .map_or(Some(v_f64), |s| Some(s + ((v_f64 - s) / (self.n as f64))));
+
+        self.insert_buffer.push(v);
+        self.inserts = (self.inserts + 1) % self.insert_threshold;
+        if self.inserts == 0 {
+            self.flush();
+        }
     }
 
-    fn priv_insert(&mut self, v: T) {
-        let s = self.samples.len();
-        if s == 0 {
+    fn merge(&mut self) {
+        for v in self.insert_buffer.drain(..) {
+            let s = self.samples.len();
+            if s == 0 {
+                self.samples.insert(
+                    0,
+                    Entry {
+                        v: v,
+                        g: 1,
+                        delta: 0,
+                    },
+                );
+                continue;
+            }
+
+            let mut idx = 0;
+            let mut r = 0;
+            for i in 0..s {
+                let smpl = &self.samples[i];
+                match smpl.v.partial_cmp(&v).unwrap() {
+                    cmp::Ordering::Less => {
+                        idx += 1;
+                        r += smpl.g
+                    }
+                    _ => break,
+                }
+            }
+            let delta = if idx == 0 || idx == s {
+                0
+            } else {
+                invariant(r as f64, self.error) - 1
+            };
             self.samples.insert(
-                0,
+                idx,
                 Entry {
                     v: v,
                     g: 1,
-                    delta: 0,
+                    delta: delta,
                 },
             );
-            self.n += 1;
-            return;
-        }
-
-        let mut idx = 0;
-        let mut r = 0;
-        for i in 0..s {
-            let smpl = &self.samples[i];
-            match smpl.v.partial_cmp(&v).unwrap() {
-                cmp::Ordering::Less => { idx += 1; r += smpl.g },
-                _ => break,
-            }
-        }
-        let delta = if idx == 0 || idx == s {
-            0
-        } else {
-            self.invariant(r as f64) - 1
-        };
-        self.samples.insert(
-            idx,
-            Entry {
-                v: v,
-                g: 1,
-                delta: delta,
-            },
-        );
-        self.n += 1;
-        self.inserts = (self.inserts + 1) % self.insert_threshold;
-        if self.inserts == 0 {
-            self.compress();
         }
     }
 
@@ -305,7 +324,7 @@ impl<
             r += prev.g;
 
             let lhs = (r + cur.g + cur.delta) as f64;
-            let rhs = nphi + ((self.invariant(nphi) as f64) / 2.0);
+            let rhs = nphi + ((invariant(nphi, self.error) as f64) / 2.0);
 
             if lhs > rhs {
                 return Some((r, prev.v));
@@ -314,6 +333,16 @@ impl<
 
         let v = self.samples[s - 1].v;
         Some((s, v))
+    }
+
+    /// Ensure all internal buffers are flushed
+    ///
+    /// This function ensures that all submitted points are properly merged into
+    /// the quantile structure. If this function is not called it is possible
+    /// for the result of query to be off from true.
+    pub fn flush(&mut self) {
+        self.merge();
+        self.compress();
     }
 
     /// Query CKMS for the count of its points
@@ -357,16 +386,6 @@ impl<
         self.samples.into_iter().map(|ent| ent.v).collect()
     }
 
-    #[inline]
-    fn invariant(&self, r: f64) -> usize {
-        let i = (2.0 * self.error * r).floor() as usize;
-        if i == 0 {
-            1
-        } else {
-            i
-        }
-    }
-
     fn compress(&mut self) {
         if self.samples.len() < 3 {
             return;
@@ -382,7 +401,7 @@ impl<
             let nxt_g = self.samples[idx + 1].g;
             let nxt_delta = self.samples[idx + 1].delta;
 
-            if cur_g + nxt_g + nxt_delta <= self.invariant(r) {
+            if cur_g + nxt_g + nxt_delta <= invariant(r, self.error) {
                 let ent = Entry {
                     v: nxt_v,
                     g: nxt_g + cur_g,
@@ -485,6 +504,7 @@ mod test {
             for d in &data {
                 ckms.insert(*d);
             }
+            ckms.flush();
 
             if let Some((_, v)) = ckms.query(prcnt) {
                 debug_assert!(
@@ -605,13 +625,14 @@ mod test {
     #[test]
     fn query_invariant_test() {
         fn query_invariant(f: f64, fs: Vec<i32>) -> TestResult {
+            let error = 0.001;
             if fs.len() < 1 {
                 return TestResult::discard();
             }
 
             let phi = (1.0 / (1.0 + E.powf(f.abs()))) * 2.0;
 
-            let mut ckms = CKMS::<i32>::new(0.001);
+            let mut ckms = CKMS::<i32>::new(error);
             for f in fs {
                 ckms.insert(f);
             }
@@ -620,7 +641,7 @@ mod test {
                 None => TestResult::passed(), // invariant to check here? n*phi + f > 1?
                 Some((rank, _)) => {
                     let nphi = phi * (ckms.n as f64);
-                    let fdiv2 = (ckms.invariant(nphi) as f64) / 2.0;
+                    let fdiv2 = (invariant(nphi, error) as f64) / 2.0;
                     TestResult::from_bool(
                         ((nphi - fdiv2) <= (rank as f64)) || ((rank as f64) <= (nphi + fdiv2)),
                     )
@@ -639,6 +660,7 @@ mod test {
         for i in 0..2 {
             ckms.insert(i as f64);
         }
+        ckms.flush();
 
         assert_eq!(0.0, ckms.samples[0].v);
         assert_eq!(1.0, ckms.samples[1].v);
@@ -654,6 +676,7 @@ mod test {
             for f in fs {
                 ckms.insert(f);
             }
+            ckms.flush();
 
             if ckms.samples.len() == 0 && fsc.len() == 0 {
                 return TestResult::passed();
@@ -678,7 +701,8 @@ mod test {
     #[test]
     fn f_invariant_test() {
         fn f_invariant(fs: Vec<i32>) -> TestResult {
-            let mut ckms = CKMS::<i32>::new(0.001);
+            let error = 0.001;
+            let mut ckms = CKMS::<i32>::new(error);
             for f in fs {
                 ckms.insert(f);
             }
@@ -691,9 +715,13 @@ mod test {
 
                 r += prev.g;
 
-                let res = (cur.g + cur.delta) <= ckms.invariant(r as f64);
+                let res = (cur.g + cur.delta) <= invariant(r as f64, error);
                 if !res {
-                    println!("{:?} <= {:?}", cur.g + cur.delta, ckms.invariant(r as f64));
+                    println!(
+                        "{:?} <= {:?}",
+                        cur.g + cur.delta,
+                        invariant(r as f64, error)
+                    );
                     println!("samples: {:?}", ckms.samples);
                     return TestResult::failed();
                 }
@@ -761,6 +789,7 @@ mod test {
         for i in 1..1001 {
             ckms.insert(i as i32);
         }
+        ckms.flush();
 
         assert_eq!(ckms.query(0.00), Some((1, 1)));
         assert_eq!(ckms.query(0.05), Some((50, 50)));
