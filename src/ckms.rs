@@ -239,20 +239,17 @@ impl<
         }
 
         let mut idx = 0;
+        let mut r = 0;
         for i in 0..s {
             let smpl = &self.samples[i];
             match smpl.v.partial_cmp(&v).unwrap() {
-                cmp::Ordering::Less => idx += 1,
+                cmp::Ordering::Less => { idx += 1; r += smpl.g },
                 _ => break,
             }
         }
         let delta = if idx == 0 || idx == s {
             0
         } else {
-            let mut r = 0;
-            for smpl in &self.samples[..idx] {
-                r += smpl.g;
-            }
             self.invariant(r as f64) - 1
         };
         self.samples.insert(
@@ -376,14 +373,14 @@ impl<
         }
 
         let mut s_mx = self.samples.len() - 1;
-        let mut i = 0;
+        let mut idx = 0;
         let mut r: f64 = 1.0;
 
-        loop {
-            let cur_g = self.samples[i].g;
-            let nxt_v = self.samples[i + 1].v;
-            let nxt_g = self.samples[i + 1].g;
-            let nxt_delta = self.samples[i + 1].delta;
+        while idx < s_mx {
+            let cur_g = self.samples[idx].g;
+            let nxt_v = self.samples[idx + 1].v;
+            let nxt_g = self.samples[idx + 1].g;
+            let nxt_delta = self.samples[idx + 1].delta;
 
             if cur_g + nxt_g + nxt_delta <= self.invariant(r) {
                 let ent = Entry {
@@ -391,18 +388,15 @@ impl<
                     g: nxt_g + cur_g,
                     delta: nxt_delta,
                 };
-                self.samples[i] = ent;
-                self.samples.remove(i + 1);
+                self.samples[idx] = ent;
+                self.samples.remove(idx + 1);
                 s_mx -= 1;
             } else {
-                i += 1;
+                idx += 1;
             }
             r += 1.0;
-
-            if i == s_mx {
-                break;
-            }
         }
+        self.samples.shrink_to_fit();
     }
 }
 
