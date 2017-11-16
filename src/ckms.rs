@@ -150,7 +150,7 @@ impl<
             insert_threshold: insert_threshold,
             inserts: 0,
 
-            samples: Vec::<Entry<T>>::new(),
+            samples: Vec::new(),
 
             last_in: None,
             sum: None,
