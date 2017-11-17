@@ -536,6 +536,9 @@ mod test {
             } else if (lhs.len() + rhs.len()) < 1 {
                 return TestResult::discard();
             }
+            if lhs.is_empty() || rhs.is_empty() {
+                return TestResult::discard()
+            }
             let mut data = lhs.clone();
             data.append(&mut rhs.clone());
             data.sort_by(|a, b| a.partial_cmp(b).unwrap());
