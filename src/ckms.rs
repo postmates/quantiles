@@ -308,7 +308,8 @@ impl<
     /// assert_eq!(ckms.query(0.998), Some((998, 997)));
     /// assert_eq!(ckms.query(1.0), Some((1000, 999)));
     /// ```
-    pub fn query(&self, q: f64) -> Option<(usize, T)> {
+    pub fn query(&mut self, q: f64) -> Option<(usize, T)> {
+        self.flush();
         let s = self.samples.len();
 
         if s == 0 {
@@ -338,9 +339,8 @@ impl<
     /// Ensure all internal buffers are flushed
     ///
     /// This function ensures that all submitted points are properly merged into
-    /// the quantile structure. If this function is not called it is possible
-    /// for the result of query to be off from true.
-    pub fn flush(&mut self) {
+    /// the quantile structure.
+    fn flush(&mut self) {
         self.merge();
         self.compress();
     }
