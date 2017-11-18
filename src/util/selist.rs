@@ -106,13 +106,25 @@ where
         let mut blk = self.head;
         unsafe {
             while !blk.is_null() {
-                for e in &(*blk).elems {
-                    match e.partial_cmp(&elem).unwrap() {
-                        cmp::Ordering::Less => idx += 1,
-                        cmp::Ordering::Equal => return idx,
-                        cmp::Ordering::Greater => return idx.saturating_sub(1),
+                if (*blk).elems.is_empty() {
+                    return idx;
+                }
+                
+                let fst = &(*blk).elems[0];
+                let lst = &(*blk).elems[(*blk).elems.len() - 1];
+
+                if (fst < elem) && (lst < elem) {
+                    idx += (*blk).elems.len();
+                } else if (fst < elem) && (lst >= elem) {
+                    for e in &(*blk).elems {
+                        match e.partial_cmp(&elem).unwrap() {
+                            cmp::Ordering::Less => idx += 1,
+                            cmp::Ordering::Equal => return idx,
+                            cmp::Ordering::Greater => return idx.saturating_sub(1),
+                        }
                     }
                 }
+
                 blk = (*blk).next;
             }
         }
