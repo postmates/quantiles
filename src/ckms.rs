@@ -10,25 +10,37 @@
 //! variant of this algorithm is fundamentally flawed, an issue which the
 //! authors correct in their "Space- and Time-Efficient Deterministic Algorithms
 //! for Biased Quantiles over Data Streams"
-
 use std;
 use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Div, Sub};
+use util::selist::SEList;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-struct Entry<T: Copy> {
+struct Entry<T> where T: Copy + PartialEq {
     v: T,
     g: usize,
     delta: usize,
+}
+
+impl<T> PartialEq for Entry<T> where T: Copy + PartialEq {
+    fn eq(&self, other: &Entry<T>) -> bool {
+        self.v == other.v
+    }
+}
+
+impl<T> PartialOrd for Entry<T> where T: Copy + PartialOrd {
+    fn partial_cmp(&self, other: &Entry<T>) -> Option<cmp::Ordering> {
+        self.v.partial_cmp(&other.v)
+    }
 }
 
 /// A structure to provide approximate quantiles queries in bounded memory and
 /// with bounded error.
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-pub struct CKMS<T: Copy> {
+pub struct CKMS<T> where T: Copy + PartialEq {
     n: usize,
 
     // We follow the 'batch' method of the above paper. In this method,
@@ -50,7 +62,7 @@ pub struct CKMS<T: Copy> {
     // occasionally merged. The outlined implementation uses a linked list but
     // we prefer a Vec for reasons of cache locality at the cost of worse
     // computational complexity.
-    samples: Vec<Entry<T>>,
+    samples: SEList<Entry<T>>,
 
     // We take the 'Batch' approach described in the paper. New points are
     // received into `insert_buffer` and are merged every 1/2 * error
@@ -166,7 +178,7 @@ impl<
             inserts: 0,
 
             insert_buffer: Vec::with_capacity(insert_threshold),
-            samples: Vec::new(),
+            samples: SEList::new(2048),
 
             last_in: None,
             sum: None,
@@ -254,7 +266,7 @@ impl<
                         g: 1,
                         delta: 0,
                     },
-                );
+                ).unwrap();
                 continue;
             }
 
@@ -282,7 +294,7 @@ impl<
                     g: 1,
                     delta: delta,
                 },
-            );
+            ).unwrap();
         }
     }
 
@@ -383,7 +395,7 @@ impl<
     /// assert_eq!(ckms.into_vec(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     /// ```
     pub fn into_vec(self) -> Vec<T> {
-        self.samples.into_iter().map(|ent| ent.v).collect()
+        self.samples.iter().map(|ent| ent.v).collect()
     }
 
     fn compress(&mut self) {
@@ -397,9 +409,10 @@ impl<
 
         while idx < s_mx {
             let cur_g = self.samples[idx].g;
-            let nxt_v = self.samples[idx + 1].v;
-            let nxt_g = self.samples[idx + 1].g;
-            let nxt_delta = self.samples[idx + 1].delta;
+            let nxt = self.samples[idx + 1].clone();
+            let nxt_v = nxt.v;
+            let nxt_g = nxt.g;
+            let nxt_delta = nxt.delta;
 
             if cur_g + nxt_g + nxt_delta <= invariant(r, self.error) {
                 let ent = Entry {
@@ -408,14 +421,13 @@ impl<
                     delta: nxt_delta,
                 };
                 self.samples[idx] = ent;
-                self.samples.remove(idx + 1);
+                self.samples.remove(idx + 1).unwrap();
                 s_mx -= 1;
             } else {
                 idx += 1;
             }
             r += 1.0;
         }
-        self.samples.shrink_to_fit();
     }
 }
 
@@ -685,7 +697,7 @@ mod test {
                 return TestResult::passed();
             }
             let mut cur = ckms.samples[0].v;
-            for ent in ckms.samples {
+            for ent in ckms.samples.iter() {
                 let s = ent.v;
                 if s < cur {
                     return TestResult::failed();

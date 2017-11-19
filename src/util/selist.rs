@@ -14,9 +14,11 @@ use std::fmt;
 ///
 /// This structure is also called an 'unrolled linked list'.
 use std::ptr;
+use std::ops::{Index, IndexMut};
+use std::marker::PhantomData;
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SEList<T> {
     max_block_size: usize,
     total_elements: usize,
@@ -143,24 +145,6 @@ where
         }
     }
 
-    pub fn get(&mut self, index: usize) -> Result<&T, Error> {
-        let mut blk = self.head;
-        let mut idx = index;
-        unsafe {
-            while idx != 0 {
-                assert!(!blk.is_null());
-                let total_elems = (*blk).elems.len();
-                if idx < total_elems {
-                    break;
-                } else {
-                    idx -= total_elems;
-                }
-                blk = (*blk).next;
-            }
-            Ok(&(*blk).elems[idx])
-        }
-    }
-
     pub fn insert(&mut self, index: usize, elem: T) -> Result<(), Error> {
         let mut blk = self.head;
         let mut idx = index;
@@ -176,6 +160,27 @@ where
                 blk = (*blk).next;
             }
             (*blk).elems.insert(idx, elem);
+            self.block_tidy(blk);
+        }
+        self.total_elements += 1;
+        Ok(())
+    }
+
+    pub fn replace(&mut self, index: usize, elem: T) -> Result<(), Error> {
+        let mut blk = self.head;
+        let mut idx = index;
+        unsafe {
+            while idx != 0 {
+                assert!(!blk.is_null());
+                let total_elems = (*blk).elems.len();
+                if idx <= total_elems {
+                    break;
+                } else {
+                    idx -= total_elems;
+                }
+                blk = (*blk).next;
+            }
+            (*blk).elems[idx] = elem;
             self.block_tidy(blk);
         }
         self.total_elements += 1;
@@ -201,13 +206,94 @@ where
         }
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.total_elements
+    }
+
+    pub fn iter(&self) -> Iter<T> {
+        Iter {
+            cur: self.head,
+            offset: 0,
+            phantom: PhantomData,
+        }
     }
 
     #[cfg(test)]
     fn blocks(&self) -> usize {
         self.total_blocks
+    }
+}
+
+impl<T> Index<usize> for SEList<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &T {
+        let mut blk = self.head;
+        let mut idx = index;
+        unsafe {
+            while idx != 0 {
+                assert!(!blk.is_null());
+                let total_elems = (*blk).elems.len();
+                if idx < total_elems {
+                    break;
+                } else {
+                    idx -= total_elems;
+                }
+                blk = (*blk).next;
+            }
+            &(*blk).elems[idx]
+        }
+    }
+}
+
+impl<T> IndexMut<usize> for SEList<T> {
+    fn index_mut(&mut self, index: usize) -> &mut T {
+        let mut blk = self.head;
+        let mut idx = index;
+        unsafe {
+            while idx != 0 {
+                assert!(!blk.is_null());
+                let total_elems = (*blk).elems.len();
+                if idx < total_elems {
+                    break;
+                } else {
+                    idx -= total_elems;
+                }
+                blk = (*blk).next;
+            }
+            &mut (*blk).elems[idx]
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Iter<'a, T: 'a> {
+    cur: *mut Block<T>, 
+    offset: usize,
+    phantom: PhantomData<&'a T>,
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = &'a T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            loop {
+                if self.cur.is_null() || (*self.cur).elems.is_empty() {
+                    return None;
+                } else {
+                    if self.offset > (*self.cur).elems.len() {
+                        self.offset = 0;
+                        self.cur = (*self.cur).next;
+                        continue;
+                    } else {
+                        let res = &(*self.cur).elems[self.offset];
+                        self.offset += 1;
+                        return Some(&res);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -256,8 +342,7 @@ mod test {
                     Err(i) => i,
                 };
                 assert!(selist.insert(idx, elem).is_ok());
-                assert!(selist.get(idx).is_ok());
-                assert_eq!(*selist.get(idx).unwrap(), elem);
+                assert_eq!(selist[idx], elem);
             }
             TestResult::passed()
         }
