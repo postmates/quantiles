@@ -53,9 +53,6 @@ impl<T> Block<T> {
     }
 }
 
-// TODO keep interior cursor to speed up insertions etc
-// TODO implement remove: can use index which will be fast with interior cursor
-
 impl<T> Drop for SEList<T> {
     fn drop(&mut self) {
         let mut blk = self.head;
@@ -97,11 +94,6 @@ where
     }
 
     pub fn search(&self, elem: &T) -> usize {
-        // TODO optimization:
-        //
-        // Search the first and last element of the block. If the last element
-        // is greater and the first is less then we know the idx is somewhere in
-        // the block. Else, we move on to the next block.
         let mut idx: usize = 0;
         let mut blk = self.head;
         unsafe {
@@ -133,7 +125,7 @@ where
 
     fn block_tidy(&mut self, block: *mut Block<T>) {
         unsafe {
-            if (*block).elems.len() >= self.max_block_size {
+            if (*block).elems.len() > self.max_block_size {
                 let blk_size = match self.max_block_size {
                     0 => unreachable!(),
                     1 => 1,
@@ -166,8 +158,6 @@ where
                 blk = (*blk).next;
             }
             (*blk).elems.insert(idx, elem);
-            // TIDY doesn't get called if the number of elements is just right,
-            // causing our block calculation above to be innacurate.
             self.block_tidy(blk);
         }
         self.total_elements += 1;
