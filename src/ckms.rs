@@ -14,7 +14,6 @@ use std;
 use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Div, Sub};
-use util::selist::SEList;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
@@ -62,7 +61,7 @@ pub struct CKMS<T> where T: Copy + PartialEq {
     // occasionally merged. The outlined implementation uses a linked list but
     // we prefer a Vec for reasons of cache locality at the cost of worse
     // computational complexity.
-    samples: SEList<Entry<T>>,
+    samples: Vec<Entry<T>>,
 
     // We take the 'Batch' approach described in the paper. New points are
     // received into `insert_buffer` and are merged every 1/2 * error
@@ -84,7 +83,9 @@ where
         + Debug
         + std::convert::Into<f64>,
 {
-    fn add_assign(&mut self, rhs: CKMS<T>) {
+    fn add_assign(&mut self, mut rhs: CKMS<T>) {
+        rhs.flush();
+        self.flush();
         self.last_in = rhs.last_in;
         self.sum = match (self.sum, rhs.sum) {
             (None, None) => None,
@@ -178,7 +179,7 @@ impl<
             inserts: 0,
 
             insert_buffer: Vec::with_capacity(insert_threshold),
-            samples: SEList::new(2048),
+            samples: Vec::new(),
 
             last_in: None,
             sum: None,
@@ -266,7 +267,7 @@ impl<
                         g: 1,
                         delta: 0,
                     },
-                ).unwrap();
+                );
                 continue;
             }
 
@@ -294,7 +295,7 @@ impl<
                     g: 1,
                     delta: delta,
                 },
-            ).unwrap();
+            );
         }
     }
 
@@ -320,8 +321,7 @@ impl<
     /// assert_eq!(ckms.query(0.998), Some((998, 997)));
     /// assert_eq!(ckms.query(1.0), Some((1000, 999)));
     /// ```
-    pub fn query(&mut self, q: f64) -> Option<(usize, T)> {
-        self.flush();
+    pub fn query(&self, q: f64) -> Option<(usize, T)> {
         let s = self.samples.len();
 
         if s == 0 {
@@ -354,7 +354,7 @@ impl<
     /// the quantile structure.
     fn flush(&mut self) {
         self.merge();
-        self.compress();
+        self.compress()
     }
 
     /// Query CKMS for the count of its points
@@ -409,10 +409,9 @@ impl<
 
         while idx < s_mx {
             let cur_g = self.samples[idx].g;
-            let nxt = self.samples[idx + 1].clone();
-            let nxt_v = nxt.v;
-            let nxt_g = nxt.g;
-            let nxt_delta = nxt.delta;
+            let nxt_v = self.samples[idx + 1].v;
+            let nxt_g = self.samples[idx + 1].g;
+            let nxt_delta = self.samples[idx + 1].delta;
 
             if cur_g + nxt_g + nxt_delta <= invariant(r, self.error) {
                 let ent = Entry {
@@ -421,7 +420,7 @@ impl<
                     delta: nxt_delta,
                 };
                 self.samples[idx] = ent;
-                self.samples.remove(idx + 1).unwrap();
+                self.samples.remove(idx + 1);
                 s_mx -= 1;
             } else {
                 idx += 1;
@@ -755,12 +754,26 @@ mod test {
         for i in 1..10000 {
             ckms.insert(i);
         }
-        ckms.compress();
+        ckms.flush();
 
         let l = ckms.samples.len();
         let n = ckms.count();
         assert_eq!(9999, n);
         assert_eq!(316, l);
+    }
+
+    #[test]
+    fn single_value_compression_test() {
+        let mut ckms = CKMS::<u32>::new(0.1);
+        for _ in 1..10 {
+            ckms.insert(1);
+        }
+        ckms.flush();
+
+        let l = ckms.samples.len();
+        let n = ckms.count();
+        assert_eq!(9999, n);
+        assert_eq!(1, l);
     }
 
     // prop: post-compression, samples is bounded above by O(1/e log^2 en)

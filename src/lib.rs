@@ -27,4 +27,5 @@ pub mod histogram;
 
 // TODO making this public really stinks. I only need it to be public for
 // benchmarking but I can't figure out how to avoid exposing it all the time.
+#[cfg(test)]
 pub mod util;
