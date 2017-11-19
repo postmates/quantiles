@@ -537,7 +537,7 @@ mod test {
                 return TestResult::discard();
             }
             if lhs.is_empty() || rhs.is_empty() {
-                return TestResult::discard()
+                return TestResult::discard();
             }
             let mut data = lhs.clone();
             data.append(&mut rhs.clone());

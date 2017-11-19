@@ -8,7 +8,9 @@ use std::fmt;
 /// a Vec is unsustainable above a relatively small amount of points.
 ///
 /// Implementation is based on:
-/// http://opendatastructures.org/ods-java/3_3_SEList_Space_Efficient_.html
+/// [Open Datastructure
+/// `SEList`](http://opendatastructures.
+/// org/ods-java/3_3_SEList_Space_Efficient_.html)
 ///
 /// This structure is also called an 'unrolled linked list'.
 use std::ptr;
@@ -19,7 +21,6 @@ pub struct SEList<T> {
     max_block_size: usize,
     total_elements: usize,
     total_blocks: usize,
-
     head: *mut Block<T>,
 }
 
@@ -93,15 +94,15 @@ where
         }
     }
 
-    pub fn search(&self, elem: &T) -> usize {
+    pub fn search(&self, elem: &T) -> Result<usize, usize> {
         let mut idx: usize = 0;
         let mut blk = self.head;
         unsafe {
             while !blk.is_null() {
                 if (*blk).elems.is_empty() {
-                    return idx;
+                    return Err(idx);
                 }
-                
+
                 let fst = &(*blk).elems[0];
                 let lst = &(*blk).elems[(*blk).elems.len() - 1];
 
@@ -109,10 +110,10 @@ where
                     idx += (*blk).elems.len();
                 } else if (fst < elem) && (lst >= elem) {
                     for e in &(*blk).elems {
-                        match e.partial_cmp(&elem).unwrap() {
+                        match e.partial_cmp(elem).unwrap() {
                             cmp::Ordering::Less => idx += 1,
-                            cmp::Ordering::Equal => return idx,
-                            cmp::Ordering::Greater => return idx.saturating_sub(1),
+                            cmp::Ordering::Equal => return Ok(idx),
+                            cmp::Ordering::Greater => return Err(idx.saturating_sub(1)),
                         }
                     }
                 }
@@ -120,7 +121,7 @@ where
                 blk = (*blk).next;
             }
         }
-        idx
+        Err(idx)
     }
 
     fn block_tidy(&mut self, block: *mut Block<T>) {
@@ -128,8 +129,7 @@ where
             if (*block).elems.len() > self.max_block_size {
                 let blk_size = match self.max_block_size {
                     0 => unreachable!(),
-                    1 => 1,
-                    2 => 1,
+                    1 | 2 => 1,
                     3 => 2,
                     i => i / 2,
                 };
@@ -140,6 +140,24 @@ where
                 (*new_blk).prev = block;
                 self.total_blocks += 1;
             }
+        }
+    }
+
+    pub fn get(&mut self, index: usize) -> Result<&T, Error> {
+        let mut blk = self.head;
+        let mut idx = index;
+        unsafe {
+            while idx != 0 {
+                assert!(!blk.is_null());
+                let total_elems = (*blk).elems.len();
+                if idx < total_elems {
+                    break;
+                } else {
+                    idx -= total_elems;
+                }
+                blk = (*blk).next;
+            }
+            Ok(&(*blk).elems[idx])
         }
     }
 
@@ -179,7 +197,7 @@ where
                 idx -= 1;
             }
             self.total_elements -= 1;
-            return Ok((*blk).elems.remove(offset));
+            Ok((*blk).elems.remove(offset))
         }
     }
 
@@ -210,10 +228,36 @@ mod test {
 
             assert_eq!(selist.len(), expected_len);
             for elem in data {
-                let idx = selist.search(&elem);
+                let idx = match selist.search(&elem) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
                 assert!(selist.insert(idx, elem).is_ok());
                 expected_len += 1;
                 assert_eq!(selist.len(), expected_len);
+            }
+            TestResult::passed()
+        }
+        QuickCheck::new().quickcheck(inner as fn(Vec<u32>, usize) -> TestResult);
+    }
+
+    #[test]
+    fn insert_then_search_get() {
+        fn inner(data: Vec<u32>, max_block_size: usize) -> TestResult {
+            if max_block_size == 0 {
+                return TestResult::discard();
+            }
+
+            let mut selist = SEList::new(max_block_size);
+
+            for elem in data {
+                let idx = match selist.search(&elem) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
+                assert!(selist.insert(idx, elem).is_ok());
+                assert!(selist.get(idx).is_ok());
+                assert_eq!(*selist.get(idx).unwrap(), elem);
             }
             TestResult::passed()
         }
@@ -232,7 +276,10 @@ mod test {
 
             assert_eq!(selist.len(), expected_blocks);
             for elem in data {
-                let idx = selist.search(&elem);
+                let idx = match selist.search(&elem) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
                 assert!(selist.insert(idx, elem).is_ok());
                 if expected_blocks == selist.blocks() {
                     continue;
@@ -259,7 +306,10 @@ mod test {
 
             let mut selist = SEList::new(max_block_size);
             for elem in data {
-                let idx = selist.search(&elem);
+                let idx = match selist.search(&elem) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
                 assert!(selist.insert(idx, elem).is_ok());
             }
 
@@ -277,30 +327,4 @@ mod test {
         }
         QuickCheck::new().quickcheck(inner as fn(Vec<u32>, usize) -> TestResult);
     }
-
-    // #[test]
-    // fn simple_block_size() {
-    //     let data = vec![0, 0, 0, 0, 1, 0, 1];
-    //     let max_block_size = 6;
-
-    //     let mut selist = SEList::new(max_block_size);
-    //     for elem in data {
-    //         let idx = selist.search(&elem);
-    //         // println!("ELEM: {:?} | IDX: {:?}", elem, idx);
-    //         assert!(selist.insert(idx, elem).is_ok());
-    //     }
-
-    //     let mut blk = selist.head;
-    //     let mut prev = ptr::null_mut();
-    //     while !blk.is_null() {
-    //         unsafe {
-    //             // println!("{:?}", (*blk).elems);
-    //             assert!((*blk).elems.len() <= max_block_size);
-    //             // println!("{:?} -> {:?}", prev, blk);
-    //             prev = blk;
-    //             blk = (*blk).next;
-    //             assert!(prev != blk);
-    //         }
-    //     }
-    // }
 }

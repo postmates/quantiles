@@ -16,8 +16,10 @@ mod selist {
                 b.iter(|| {
                     let mut selist = SEList::<$t>::new(8192);
                     for _ in 0..$s {
-                        let elem = xshft.next() as $t;
-                        let idx = selist.search(&elem);
+                        let elem = xshft.next_val() as $t;
+                        let idx = match selist.search(&elem) {
+                            Ok(i) | Err(i) => i,
+                        };
                         let _ = selist.insert(idx, elem);
                     }
                 });
@@ -33,10 +35,9 @@ mod selist {
                 b.iter(|| {
                     let mut v = Vec::with_capacity(1024);
                     for _ in 0..$s {
-                        let elem = xshft.next() as $t;
+                        let elem = xshft.next_val() as $t;
                         let idx = match v.binary_search(&elem) {
-                            Ok(i) => i,
-                            Err(i) => i,
+                            Ok(i) | Err(i) => i,
                         };
                         v.insert(idx, elem)
                     }
@@ -58,14 +59,18 @@ mod selist {
             let mut xshft = Xorshift::new(1972);
             let mut selist = SEList::<u16>::new(65_536);
             for _ in 0..1_000_000 {
-                let elem = xshft.next() as u16;
-                let idx = selist.search(&elem);
+                let elem = xshft.next_val() as u16;
+                let idx = match selist.search(&elem) {
+                    Ok(i) | Err(i) => i,
+                };
                 let _ = selist.insert(idx, elem);
             }
-                
+
             b.iter(|| {
-                let elem = xshft.next() as u16;
-                let idx = selist.search(&elem);
+                let elem = xshft.next_val() as u16;
+                let idx = match selist.search(&elem) {
+                    Ok(i) | Err(i) => i,
+                };
                 let _ = selist.insert(idx, elem);
             });
         }
@@ -83,23 +88,21 @@ mod selist {
                 let mut xshft = Xorshift::new(1972);
                 let mut v = Vec::with_capacity(1024);
                 for _ in 0..1_000_000 {
-                    let elem = xshft.next() as u16;
+                    let elem = xshft.next_val() as u16;
                     let idx = match v.binary_search(&elem) {
-                        Ok(i) => i,
-                        Err(i) => i,
+                        Ok(i) | Err(i) => i,
                     };
                     v.insert(idx, elem)
                 }
-                
+
                 b.iter(|| {
-                    let elem = xshft.next() as u16;
+                    let elem = xshft.next_val() as u16;
                     let idx = match v.binary_search(&elem) {
-                        Ok(i) => i,
-                        Err(i) => i,
+                        Ok(i) | Err(i) => i,
                     };
                     v.insert(idx, elem)
                 });
-            } 
+            }
         }
     }
 

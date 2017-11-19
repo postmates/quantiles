@@ -16,7 +16,7 @@ mod ckms {
                 b.iter(|| {
                     let mut ckms = CKMS::<$t>::new(0.001);
                     for _ in 0..$s {
-                        let val = xshft.next();
+                        let val = xshft.next_val();
                         ckms.insert(val as $t);
                     }
                 });
