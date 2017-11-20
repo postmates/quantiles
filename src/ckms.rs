@@ -26,6 +26,8 @@ where
     delta: usize,
 }
 
+// The derivation of PartialEq for Entry is not appropriate. The sole ordering
+// value in an Entry is the value 'v'.
 impl<T> PartialEq for Entry<T>
 where
     T: Copy + PartialEq,
@@ -90,9 +92,7 @@ where
         + Debug
         + std::convert::Into<f64>,
 {
-    fn add_assign(&mut self, mut rhs: CKMS<T>) {
-        rhs.flush();
-        self.flush();
+    fn add_assign(&mut self, rhs: CKMS<T>) {
         self.last_in = rhs.last_in;
         self.sum = match (self.sum, rhs.sum) {
             (None, None) => None,
@@ -352,12 +352,6 @@ impl<
         Some((s, v))
     }
 
-    /// Ensure all internal buffers are flushed
-    ///
-    /// This function ensures that all submitted points are properly merged into
-    /// the quantile structure.
-    fn flush(&mut self) {}
-
     /// Query CKMS for the count of its points
     ///
     /// This function returns the total number of points seen over the lifetime
@@ -510,7 +504,6 @@ mod test {
             for d in &data {
                 ckms.insert(*d);
             }
-            ckms.flush();
 
             if let Some((_, v)) = ckms.query(prcnt) {
                 debug_assert!(
@@ -676,7 +669,6 @@ mod test {
         for i in 0..2 {
             ckms.insert(i as f64);
         }
-        ckms.flush();
 
         assert_eq!(0.0, ckms.samples[0].v);
         assert_eq!(1.0, ckms.samples[1].v);
@@ -692,7 +684,6 @@ mod test {
             for f in fs {
                 ckms.insert(f);
             }
-            ckms.flush();
 
             if ckms.samples.len() == 0 && fsc.len() == 0 {
                 return TestResult::passed();
@@ -750,7 +741,6 @@ mod test {
         for i in 1..10000 {
             ckms.insert(i);
         }
-        ckms.flush();
 
         let l = ckms.samples.len();
         let n = ckms.count();
@@ -796,7 +786,6 @@ mod test {
         for i in 1..1001 {
             ckms.insert(i as i32);
         }
-        ckms.flush();
 
         assert_eq!(ckms.query(0.00), Some((1, 1)));
         assert_eq!(ckms.query(0.05), Some((50, 50)));
