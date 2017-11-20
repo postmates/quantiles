@@ -17,19 +17,28 @@ use std::ops::{Add, AddAssign, Div, Sub};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-struct Entry<T> where T: Copy + PartialEq {
+struct Entry<T>
+where
+    T: Copy + PartialEq,
+{
     v: T,
     g: usize,
     delta: usize,
 }
 
-impl<T> PartialEq for Entry<T> where T: Copy + PartialEq {
+impl<T> PartialEq for Entry<T>
+where
+    T: Copy + PartialEq,
+{
     fn eq(&self, other: &Entry<T>) -> bool {
         self.v == other.v
     }
 }
 
-impl<T> PartialOrd for Entry<T> where T: Copy + PartialOrd {
+impl<T> PartialOrd for Entry<T>
+where
+    T: Copy + PartialOrd,
+{
     fn partial_cmp(&self, other: &Entry<T>) -> Option<cmp::Ordering> {
         self.v.partial_cmp(&other.v)
     }
@@ -39,7 +48,10 @@ impl<T> PartialOrd for Entry<T> where T: Copy + PartialOrd {
 /// with bounded error.
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-pub struct CKMS<T> where T: Copy + PartialEq {
+pub struct CKMS<T>
+where
+    T: Copy + PartialEq,
+{
     n: usize,
 
     // We follow the 'batch' method of the above paper. In this method,
@@ -62,11 +74,6 @@ pub struct CKMS<T> where T: Copy + PartialEq {
     // we prefer a Vec for reasons of cache locality at the cost of worse
     // computational complexity.
     samples: Vec<Entry<T>>,
-
-    // We take the 'Batch' approach described in the paper. New points are
-    // received into `insert_buffer` and are merged every 1/2 * error
-    // insertions. This trades-off for query time in favor of inserts.
-    insert_buffer: Vec<T>,
 
     sum: Option<T>,
     cma: Option<f64>,
@@ -103,9 +110,10 @@ where
                 Some(((x_n * x) + (y_n * y)) / (x_n + y_n))
             }
         };
-        let mut others: Vec<T> = rhs.samples.iter().map(|x| x.v).collect();
-        self.insert_buffer.append(&mut others);
-        self.merge();
+        self.n += rhs.n;
+        for v in rhs.samples.iter().map(|x| x.v) {
+            self.merge(v);
+        }
         self.compress();
     }
 }
@@ -178,7 +186,6 @@ impl<
             insert_threshold: insert_threshold,
             inserts: 0,
 
-            insert_buffer: Vec::with_capacity(insert_threshold),
             samples: Vec::new(),
 
             last_in: None,
@@ -248,55 +255,52 @@ impl<
         let v_f64: f64 = v.into();
         self.cma = self.cma
             .map_or(Some(v_f64), |s| Some(s + ((v_f64 - s) / (self.n as f64))));
-
-        self.insert_buffer.push(v);
+        self.merge(v);
         self.inserts = (self.inserts + 1) % self.insert_threshold;
         if self.inserts == 0 {
-            self.flush();
+            self.compress()
         }
     }
 
-    fn merge(&mut self) {
-        for v in self.insert_buffer.drain(..) {
-            let s = self.samples.len();
-            if s == 0 {
-                self.samples.insert(
-                    0,
-                    Entry {
-                        v: v,
-                        g: 1,
-                        delta: 0,
-                    },
-                );
-                continue;
-            }
-
-            let mut idx = 0;
-            let mut r = 0;
-            for i in 0..s {
-                let smpl = &self.samples[i];
-                match smpl.v.partial_cmp(&v).unwrap() {
-                    cmp::Ordering::Less => {
-                        idx += 1;
-                        r += smpl.g
-                    }
-                    _ => break,
-                }
-            }
-            let delta = if idx == 0 || idx == s {
-                0
-            } else {
-                invariant(r as f64, self.error) - 1
-            };
+    fn merge(&mut self, v: T) {
+        let s = self.samples.len();
+        if s == 0 {
             self.samples.insert(
-                idx,
+                0,
                 Entry {
                     v: v,
                     g: 1,
-                    delta: delta,
+                    delta: 0,
                 },
             );
+            return;
         }
+
+        let mut idx = 0;
+        let mut r = 0;
+        for i in 0..s {
+            let smpl = &self.samples[i];
+            match smpl.v.partial_cmp(&v).unwrap() {
+                cmp::Ordering::Less => {
+                    idx += 1;
+                    r += smpl.g
+                }
+                _ => break,
+            }
+        }
+        let delta = if idx == 0 || idx == s {
+            0
+        } else {
+            invariant(r as f64, self.error) - 1
+        };
+        self.samples.insert(
+            idx,
+            Entry {
+                v: v,
+                g: 1,
+                delta: delta,
+            },
+        );
     }
 
     /// Query CKMS for a ε-approximate quantile
@@ -352,10 +356,7 @@ impl<
     ///
     /// This function ensures that all submitted points are properly merged into
     /// the quantile structure.
-    fn flush(&mut self) {
-        self.merge();
-        self.compress()
-    }
+    fn flush(&mut self) {}
 
     /// Query CKMS for the count of its points
     ///
@@ -464,8 +465,6 @@ mod test {
             return TestResult::passed();
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
 
@@ -495,8 +494,6 @@ mod test {
             return TestResult::passed();
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
     }
 
@@ -532,8 +529,6 @@ mod test {
             }
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
 
@@ -581,8 +576,6 @@ mod test {
             }
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
     }
 
@@ -599,9 +592,30 @@ mod test {
             ckms.count() == l
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(n_invariant as fn(Vec<i32>) -> bool);
+    }
+
+    #[test]
+    fn count_sum_test() {
+        fn inner(lhs: Vec<i32>, rhs: Vec<i32>) -> TestResult {
+            let mut lhs_ckms = CKMS::<i32>::new(0.001);
+            for f in lhs {
+                lhs_ckms.insert(f);
+            }
+
+            let mut rhs_ckms = CKMS::<i32>::new(0.001);
+            for f in rhs {
+                rhs_ckms.insert(f);
+            }
+
+            let expected_count = lhs_ckms.count() + rhs_ckms.count();
+            lhs_ckms += rhs_ckms;
+
+            assert_eq!(lhs_ckms.count(), expected_count);
+            TestResult::passed()
+        }
+        QuickCheck::new()
+            .quickcheck(inner as fn(Vec<i32>, Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -630,8 +644,6 @@ mod test {
             }
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(inner as fn((i32, i32)) -> bool);
     }
 
@@ -663,8 +675,6 @@ mod test {
             }
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
     }
 
@@ -706,8 +716,6 @@ mod test {
             TestResult::passed()
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(asc_samples as fn(Vec<i32>) -> TestResult);
     }
 
@@ -743,8 +751,6 @@ mod test {
             TestResult::passed()
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(f_invariant as fn(Vec<i32>) -> TestResult);
     }
 
@@ -759,21 +765,7 @@ mod test {
         let l = ckms.samples.len();
         let n = ckms.count();
         assert_eq!(9999, n);
-        assert_eq!(316, l);
-    }
-
-    #[test]
-    fn single_value_compression_test() {
-        let mut ckms = CKMS::<u32>::new(0.1);
-        for _ in 1..10 {
-            ckms.insert(1);
-        }
-        ckms.flush();
-
-        let l = ckms.samples.len();
-        let n = ckms.count();
-        assert_eq!(9999, n);
-        assert_eq!(1, l);
+        assert_eq!(320, l);
     }
 
     // prop: post-compression, samples is bounded above by O(1/e log^2 en)
@@ -806,8 +798,6 @@ mod test {
             TestResult::passed()
         }
         QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
             .quickcheck(compression_bound as fn(Vec<i32>) -> TestResult);
     }
 
