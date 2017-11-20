@@ -5,7 +5,7 @@
 //! of memory and computation. Recent literature has advanced approximations but
 //! each have fundamental tradeoffs. This crate is intended to be a collection
 //! of approximate algorithms that provide guarantees around space consumption.
-#![deny(missing_docs, missing_copy_implementations, missing_debug_implementations,
+#![deny(missing_docs, missing_debug_implementations, missing_copy_implementations, unsafe_code,
         unstable_features, unused_import_braces)]
 
 #[cfg(test)]

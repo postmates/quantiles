@@ -464,8 +464,7 @@ mod test {
             assert!((expected_mean - mean.unwrap()).abs() < err);
             return TestResult::passed();
         }
-        QuickCheck::new()
-            .quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
 
     #[test]
@@ -493,8 +492,7 @@ mod test {
             }
             return TestResult::passed();
         }
-        QuickCheck::new()
-            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
     }
 
     #[test]
@@ -528,8 +526,7 @@ mod test {
                 TestResult::failed()
             }
         }
-        QuickCheck::new()
-            .quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
 
     #[test]
@@ -575,8 +572,7 @@ mod test {
                 TestResult::failed()
             }
         }
-        QuickCheck::new()
-            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
     }
 
     #[test]
@@ -591,8 +587,7 @@ mod test {
 
             ckms.count() == l
         }
-        QuickCheck::new()
-            .quickcheck(n_invariant as fn(Vec<i32>) -> bool);
+        QuickCheck::new().quickcheck(n_invariant as fn(Vec<i32>) -> bool);
     }
 
     #[test]
@@ -614,8 +609,7 @@ mod test {
             assert_eq!(lhs_ckms.count(), expected_count);
             TestResult::passed()
         }
-        QuickCheck::new()
-            .quickcheck(inner as fn(Vec<i32>, Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<i32>, Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -643,8 +637,7 @@ mod test {
                 false
             }
         }
-        QuickCheck::new()
-            .quickcheck(inner as fn((i32, i32)) -> bool);
+        QuickCheck::new().quickcheck(inner as fn((i32, i32)) -> bool);
     }
 
     // prop: forany phi. (phi*n - f(phi*n, n)/2) =< r_i =< (phi*n + f(phi*n, n)/2)
@@ -674,8 +667,7 @@ mod test {
                 }
             }
         }
-        QuickCheck::new()
-            .quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -715,8 +707,7 @@ mod test {
             }
             TestResult::passed()
         }
-        QuickCheck::new()
-            .quickcheck(asc_samples as fn(Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(asc_samples as fn(Vec<i32>) -> TestResult);
     }
 
     // prop: forall i. g_i + delta_i =< f(r_i, n)
@@ -750,8 +741,7 @@ mod test {
             }
             TestResult::passed()
         }
-        QuickCheck::new()
-            .quickcheck(f_invariant as fn(Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(f_invariant as fn(Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -797,8 +787,7 @@ mod test {
             }
             TestResult::passed()
         }
-        QuickCheck::new()
-            .quickcheck(compression_bound as fn(Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(compression_bound as fn(Vec<i32>) -> TestResult);
     }
 
     #[test]

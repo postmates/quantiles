@@ -57,7 +57,7 @@ mod ckms {
                     let elem = xshft.next_val() as $t;
                     ckms.insert(elem);
                 }
-                
+
                 b.iter(|| {
                     let elem = xshft.next_val() as $t;
                     ckms.insert(elem);
