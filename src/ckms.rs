@@ -10,25 +10,50 @@
 //! variant of this algorithm is fundamentally flawed, an issue which the
 //! authors correct in their "Space- and Time-Efficient Deterministic Algorithms
 //! for Biased Quantiles over Data Streams"
-
 use std;
 use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Div, Sub};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-struct Entry<T: Copy> {
+struct Entry<T>
+where
+    T: Copy + PartialEq,
+{
     v: T,
     g: usize,
     delta: usize,
+}
+
+// The derivation of PartialEq for Entry is not appropriate. The sole ordering
+// value in an Entry is the value 'v'.
+impl<T> PartialEq for Entry<T>
+where
+    T: Copy + PartialEq,
+{
+    fn eq(&self, other: &Entry<T>) -> bool {
+        self.v == other.v
+    }
+}
+
+impl<T> PartialOrd for Entry<T>
+where
+    T: Copy + PartialOrd,
+{
+    fn partial_cmp(&self, other: &Entry<T>) -> Option<cmp::Ordering> {
+        self.v.partial_cmp(&other.v)
+    }
 }
 
 /// A structure to provide approximate quantiles queries in bounded memory and
 /// with bounded error.
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
-pub struct CKMS<T: Copy> {
+pub struct CKMS<T>
+where
+    T: Copy + PartialEq,
+{
     n: usize,
 
     // We follow the 'batch' method of the above paper. In this method,
@@ -85,9 +110,20 @@ where
                 Some(((x_n * x) + (y_n * y)) / (x_n + y_n))
             }
         };
-        for smpl in rhs.samples {
-            self.priv_insert(smpl.v);
+        self.n += rhs.n;
+        for v in rhs.samples.iter().map(|x| x.v) {
+            self.merge(v);
         }
+        self.compress();
+    }
+}
+
+fn invariant(r: f64, error: f64) -> usize {
+    let i = (2.0 * error * r).floor() as usize;
+    if i == 0 {
+        1
+    } else {
+        i
     }
 }
 
@@ -150,7 +186,7 @@ impl<
             insert_threshold: insert_threshold,
             inserts: 0,
 
-            samples: Vec::<Entry<T>>::new(),
+            samples: Vec::new(),
 
             last_in: None,
             sum: None,
@@ -215,17 +251,19 @@ impl<
     pub fn insert(&mut self, v: T) {
         self.sum = self.sum.map_or(Some(v), |s| Some(s.add(v)));
         self.last_in = Some(v);
-        self.priv_insert(v);
-        // NOTE: priv_insert increases self.n.
+        self.n += 1;
         let v_f64: f64 = v.into();
-        let n: f64 = self.n as f64;
         self.cma = self.cma
-            .map_or(Some(v_f64), |s| Some(s + ((v_f64 - s) / n)));
+            .map_or(Some(v_f64), |s| Some(s + ((v_f64 - s) / (self.n as f64))));
+        self.merge(v);
+        self.inserts = (self.inserts + 1) % self.insert_threshold;
+        if self.inserts == 0 {
+            self.compress()
+        }
     }
 
-    fn priv_insert(&mut self, v: T) {
+    fn merge(&mut self, v: T) {
         let s = self.samples.len();
-        let mut r = 0;
         if s == 0 {
             self.samples.insert(
                 0,
@@ -235,23 +273,25 @@ impl<
                     delta: 0,
                 },
             );
-            self.n += 1;
             return;
         }
 
         let mut idx = 0;
+        let mut r = 0;
         for i in 0..s {
             let smpl = &self.samples[i];
-            match smpl.v.partial_cmp(&v) {
-                Some(cmp::Ordering::Less) => idx += 1,
+            match smpl.v.partial_cmp(&v).unwrap() {
+                cmp::Ordering::Less => {
+                    idx += 1;
+                    r += smpl.g
+                }
                 _ => break,
             }
-            r += smpl.g;
         }
         let delta = if idx == 0 || idx == s {
             0
         } else {
-            self.invariant(r as f64) - 1
+            invariant(r as f64, self.error) - 1
         };
         self.samples.insert(
             idx,
@@ -261,11 +301,6 @@ impl<
                 delta: delta,
             },
         );
-        self.n += 1;
-        self.inserts = (self.inserts + 1) % self.insert_threshold;
-        if self.inserts == 0 {
-            self.compress();
-        }
     }
 
     /// Query CKMS for a ε-approximate quantile
@@ -306,7 +341,7 @@ impl<
             r += prev.g;
 
             let lhs = (r + cur.g + cur.delta) as f64;
-            let rhs = nphi + ((self.invariant(nphi) as f64) / 2.0);
+            let rhs = nphi + ((invariant(nphi, self.error) as f64) / 2.0);
 
             if lhs > rhs {
                 return Some((r, prev.v));
@@ -355,17 +390,7 @@ impl<
     /// assert_eq!(ckms.into_vec(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     /// ```
     pub fn into_vec(self) -> Vec<T> {
-        self.samples.into_iter().map(|ent| ent.v).collect()
-    }
-
-    #[inline]
-    fn invariant(&self, r: f64) -> usize {
-        let i = (2.0 * self.error * r).floor() as usize;
-        if 1 > i {
-            1
-        } else {
-            i
-        }
+        self.samples.iter().map(|ent| ent.v).collect()
     }
 
     fn compress(&mut self) {
@@ -374,32 +399,28 @@ impl<
         }
 
         let mut s_mx = self.samples.len() - 1;
-        let mut i = 0;
-        let mut r = 1;
+        let mut idx = 0;
+        let mut r: f64 = 1.0;
 
-        loop {
-            let cur_g = self.samples[i].g;
-            let nxt_v = self.samples[i + 1].v;
-            let nxt_g = self.samples[i + 1].g;
-            let nxt_delta = self.samples[i + 1].delta;
+        while idx < s_mx {
+            let cur_g = self.samples[idx].g;
+            let nxt_v = self.samples[idx + 1].v;
+            let nxt_g = self.samples[idx + 1].g;
+            let nxt_delta = self.samples[idx + 1].delta;
 
-            if cur_g + nxt_g + nxt_delta <= self.invariant(f64::from(r)) {
+            if cur_g + nxt_g + nxt_delta <= invariant(r, self.error) {
                 let ent = Entry {
                     v: nxt_v,
                     g: nxt_g + cur_g,
                     delta: nxt_delta,
                 };
-                self.samples[i] = ent;
-                self.samples.remove(i + 1);
+                self.samples[idx] = ent;
+                self.samples.remove(idx + 1);
                 s_mx -= 1;
             } else {
-                i += 1;
+                idx += 1;
             }
-            r += 1;
-
-            if i == s_mx {
-                break;
-            }
+            r += 1.0;
         }
     }
 }
@@ -437,10 +458,7 @@ mod test {
             assert!((expected_mean - mean.unwrap()).abs() < err);
             return TestResult::passed();
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
 
     #[test]
@@ -468,10 +486,7 @@ mod test {
             }
             return TestResult::passed();
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
     }
 
     #[test]
@@ -504,10 +519,7 @@ mod test {
                 TestResult::failed()
             }
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
 
     #[test]
@@ -518,6 +530,9 @@ mod test {
             } else if !(err >= 0.0) || !(err <= 1.0) {
                 return TestResult::discard();
             } else if (lhs.len() + rhs.len()) < 1 {
+                return TestResult::discard();
+            }
+            if lhs.is_empty() || rhs.is_empty() {
                 return TestResult::discard();
             }
             let mut data = lhs.clone();
@@ -550,10 +565,7 @@ mod test {
                 TestResult::failed()
             }
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
     }
 
     #[test]
@@ -568,10 +580,29 @@ mod test {
 
             ckms.count() == l
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(n_invariant as fn(Vec<i32>) -> bool);
+        QuickCheck::new().quickcheck(n_invariant as fn(Vec<i32>) -> bool);
+    }
+
+    #[test]
+    fn count_sum_test() {
+        fn inner(lhs: Vec<i32>, rhs: Vec<i32>) -> TestResult {
+            let mut lhs_ckms = CKMS::<i32>::new(0.001);
+            for f in lhs {
+                lhs_ckms.insert(f);
+            }
+
+            let mut rhs_ckms = CKMS::<i32>::new(0.001);
+            for f in rhs {
+                rhs_ckms.insert(f);
+            }
+
+            let expected_count = lhs_ckms.count() + rhs_ckms.count();
+            lhs_ckms += rhs_ckms;
+
+            assert_eq!(lhs_ckms.count(), expected_count);
+            TestResult::passed()
+        }
+        QuickCheck::new().quickcheck(inner as fn(Vec<i32>, Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -599,23 +630,21 @@ mod test {
                 false
             }
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(inner as fn((i32, i32)) -> bool);
+        QuickCheck::new().quickcheck(inner as fn((i32, i32)) -> bool);
     }
 
     // prop: forany phi. (phi*n - f(phi*n, n)/2) =< r_i =< (phi*n + f(phi*n, n)/2)
     #[test]
     fn query_invariant_test() {
         fn query_invariant(f: f64, fs: Vec<i32>) -> TestResult {
+            let error = 0.001;
             if fs.len() < 1 {
                 return TestResult::discard();
             }
 
             let phi = (1.0 / (1.0 + E.powf(f.abs()))) * 2.0;
 
-            let mut ckms = CKMS::<i32>::new(0.001);
+            let mut ckms = CKMS::<i32>::new(error);
             for f in fs {
                 ckms.insert(f);
             }
@@ -624,17 +653,14 @@ mod test {
                 None => TestResult::passed(), // invariant to check here? n*phi + f > 1?
                 Some((rank, _)) => {
                     let nphi = phi * (ckms.n as f64);
-                    let fdiv2 = (ckms.invariant(nphi) as f64) / 2.0;
+                    let fdiv2 = (invariant(nphi, error) as f64) / 2.0;
                     TestResult::from_bool(
                         ((nphi - fdiv2) <= (rank as f64)) || ((rank as f64) <= (nphi + fdiv2)),
                     )
                 }
             }
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -663,7 +689,7 @@ mod test {
                 return TestResult::passed();
             }
             let mut cur = ckms.samples[0].v;
-            for ent in ckms.samples {
+            for ent in ckms.samples.iter() {
                 let s = ent.v;
                 if s < cur {
                     return TestResult::failed();
@@ -672,17 +698,15 @@ mod test {
             }
             TestResult::passed()
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(asc_samples as fn(Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(asc_samples as fn(Vec<i32>) -> TestResult);
     }
 
     // prop: forall i. g_i + delta_i =< f(r_i, n)
     #[test]
     fn f_invariant_test() {
         fn f_invariant(fs: Vec<i32>) -> TestResult {
-            let mut ckms = CKMS::<i32>::new(0.001);
+            let error = 0.001;
+            let mut ckms = CKMS::<i32>::new(error);
             for f in fs {
                 ckms.insert(f);
             }
@@ -695,19 +719,20 @@ mod test {
 
                 r += prev.g;
 
-                let res = (cur.g + cur.delta) <= ckms.invariant(r as f64);
+                let res = (cur.g + cur.delta) <= invariant(r as f64, error);
                 if !res {
-                    println!("{:?} <= {:?}", cur.g + cur.delta, ckms.invariant(r as f64));
+                    println!(
+                        "{:?} <= {:?}",
+                        cur.g + cur.delta,
+                        invariant(r as f64, error)
+                    );
                     println!("samples: {:?}", ckms.samples);
                     return TestResult::failed();
                 }
             }
             TestResult::passed()
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(f_invariant as fn(Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(f_invariant as fn(Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -716,12 +741,11 @@ mod test {
         for i in 1..10000 {
             ckms.insert(i);
         }
-        ckms.compress();
 
         let l = ckms.samples.len();
         let n = ckms.count();
         assert_eq!(9999, n);
-        assert_eq!(316, l);
+        assert_eq!(320, l);
     }
 
     // prop: post-compression, samples is bounded above by O(1/e log^2 en)
@@ -753,10 +777,7 @@ mod test {
             }
             TestResult::passed()
         }
-        QuickCheck::new()
-            .tests(10000)
-            .max_tests(100000)
-            .quickcheck(compression_bound as fn(Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(compression_bound as fn(Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -788,16 +809,5 @@ mod test {
         assert_eq!(ckms.query(0.95), Some((950, 950)));
         assert_eq!(ckms.query(0.99), Some((990, 990)));
         assert_eq!(ckms.query(1.00), Some((1000, 1000)));
-    }
-
-    #[test]
-    fn test_basics_float() {
-        let mut ckms = CKMS::<f64>::new(0.001);
-        for i in 1..1001 {
-            ckms.insert(i as f64);
-        }
-
-        assert_eq!(ckms.query(0.00), Some((1, 1.0)));
-        assert_eq!(ckms.query(1.00), Some((1000, 1000.0)));
     }
 }
