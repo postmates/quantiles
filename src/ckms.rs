@@ -242,6 +242,19 @@ impl<
         self.cma
     }
 
+    /// Return the guaranteed error bound of this CKMS
+    ///
+    /// # Example
+    /// ```
+    /// use quantiles::ckms::CKMS;
+    ///
+    /// let mut ckms: CKMS<f64> = CKMS::new(0.1);
+    /// assert_eq!(0.1, ckms.error_bound());
+    /// ```
+    pub fn error_bound(&self) -> f64 {
+        self.error
+    }
+
     /// Insert a T into the CKMS
     ///
     /// Insertion will gradulally shift the approximate quantiles. This
