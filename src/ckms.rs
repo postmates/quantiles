@@ -288,10 +288,13 @@ impl<
             return;
         } else {
             let (idx, delta) = if self.samples[0].v >= v {
+                // inserting at the front
                 (0, 0)
             } else if self.samples[self.samples.len() - 1].v < v {
+                // inserting at the back
                 (self.samples.len(), 0)
             } else {
+                // inserting somewhere in the middle
                 let mut idx = 0;
                 let mut r = 0;
                 for smpl in self.samples.iter() {
@@ -303,6 +306,13 @@ impl<
                         _ => break,
                     }
                 }
+                // To insert in the middle we have to know two things:
+                //
+                //  * the correct point of insertion, 'idx'
+                //  * the sum of all Entry.g prior to 'idx', called 'r'
+                //
+                // We could avoid the 'idx' computation if we could get at 'r'
+                // some other way.
                 (idx, invariant(r as f64, self.error) - 1)
             };
 
@@ -340,15 +350,14 @@ impl<
     /// assert_eq!(ckms.query(1.0), Some((1000, 999)));
     /// ```
     pub fn query(&self, q: f64) -> Option<(usize, T)> {
-        let s = self.samples.len();
-
-        if s == 0 {
+        if self.samples.is_empty() {
             return None;
         }
 
         let mut r: u32 = 0;
+        let s = self.samples.len();
         let nphi = q * (self.n as f64);
-        for i in 1..s {
+        for i in 1 .. s {
             let prev = &self.samples[i - 1];
             let cur = &self.samples[i];
 
@@ -356,10 +365,8 @@ impl<
 
             let lhs = (r + cur.g + cur.delta) as f64;
 
-            let i = (2.0 * self.error * nphi).floor() as u32;
-            let i = if i == 0 { 1 } else { i };
-
-            let rhs = nphi + ((i as f64) / 2.0);
+            let inv = invariant(nphi, self.error);
+            let rhs = nphi + ((inv as f64) / 2.0);
 
             if lhs > rhs {
                 return Some((r as usize, prev.v));
@@ -764,7 +771,10 @@ mod test {
     }
 
     /*
-    // broken on master...
+    // broken on master... which is something to really look into. We've always
+    // just assumed there was no constant ahead of the exact equation which may
+    // not be correct. Must re-examine the paper.
+    //
     // prop: post-compression, samples is bounded above by O(1/e log^2 en)
     #[test]
     fn compression_bound_test() {
