@@ -14,6 +14,7 @@ use std;
 use std::cmp;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Div, Sub};
+use store::Store;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
@@ -75,7 +76,7 @@ where
     // occasionally merged. The outlined implementation uses a linked list but
     // we prefer a Vec for reasons of cache locality at the cost of worse
     // computational complexity.
-    samples: Vec<Entry<T>>,
+    samples: Store<Entry<T>>,
 
     sum: Option<T>,
     cma: Option<f64>,
@@ -186,7 +187,7 @@ impl<
             insert_threshold: insert_threshold,
             inserts: 0,
 
-            samples: Vec::with_capacity(10_000),
+            samples: Store::new(),
 
             last_in: None,
             sum: None,
@@ -357,7 +358,7 @@ impl<
         let mut r: u32 = 0;
         let s = self.samples.len();
         let nphi = q * (self.n as f64);
-        for i in 1 .. s {
+        for i in 1..s {
             let prev = &self.samples[i - 1];
             let cur = &self.samples[i];
 
