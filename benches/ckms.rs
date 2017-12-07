@@ -1,5 +1,6 @@
 #![feature(test)]
 
+extern crate criterion;
 extern crate quantiles;
 extern crate test;
 
@@ -29,69 +30,70 @@ mod ckms {
     }
 
     use quantiles::ckms::CKMS;
-    use test::Bencher;
 
     macro_rules! generate_tests {
-        ($t:ty, $fn:ident, $s:expr) => {
-            #[bench]
-            fn $fn(b: &mut Bencher) {
-                let mut xshft = Xorshift::new(1972);
-                b.iter(|| {
+        ($t:ty, $fn:ident, $s:expr, $name:expr) => {
+            #[test]
+            fn $fn() {
+                Criterion::default().bench_function($name, |b| b.iter(|| {
+                    let mut xshft = Xorshift::new(1972);
                     let mut ckms = CKMS::<$t>::new(0.001);
                     for _ in 0..$s {
                         let val = xshft.next_val();
                         ckms.insert(val as $t);
                     }
-                });
+                }));
             }
         }
     }
 
-    macro_rules! generate_primed_tests {
-        ($t:ty, $fn:ident, $s:expr) => {
-            #[bench]
-            fn $fn(b: &mut Bencher) {
-                let mut xshft = Xorshift::new(1972);
-                let mut ckms = CKMS::<$t>::new(0.001);
-                for _ in 0..1_000_000 {
-                    let elem = xshft.next_val() as $t;
-                    ckms.insert(elem);
-                }
+    // macro_rules! generate_primed_tests {
+    //     ($t:ty, $fn:ident, $s:expr, $name:expr) => {
+    //         #[test]
+    //         fn $fn() {
+    //             let mut xshft = Xorshift::new(1972);
+    //             let mut ckms = CKMS::<$t>::new(0.001);
+    //             for _ in 0..1_000_000 {
+    //                 let elem = xshft.next_val() as $t;
+    //                 ckms.insert(elem);
+    //             }
 
-                b.iter(|| {
-                    let elem = xshft.next_val() as $t;
-                    ckms.insert(elem);
-                });
-            }
-        }
-    }
+    //             Criterion::default().bench_function($name, |b| b.iter(|| {
+    //                 let elem = xshft.next_val() as $t;
+    //                 ckms.insert(elem);
+    //             }));
+    //         }
+    //     }
+    // }
 
     mod u16 {
         use super::*;
+        use criterion::Criterion;
 
-        generate_tests!(u16, bench_insert_100, 100);
-        generate_tests!(u16, bench_insert_1000, 1000);
-        generate_tests!(u16, bench_insert_10000, 10_000);
-        generate_tests!(u16, bench_insert_65535, 65_535);
+        // generate_tests!(u16, bench_insert_100, 100, "bench_insert_100");
+        // generate_tests!(u16, bench_insert_1000, 1000, "bench_insert_1000");
+        generate_tests!(u16, bench_insert_10000, 10_000, "bench_insert_10000");
+        // generate_tests!(u16, bench_insert_65535, 65_535, "bench_insert_65535");
 
-        generate_primed_tests!(u16, bench_primed_100, 100);
-        generate_primed_tests!(u16, bench_primed_1000, 1000);
-        generate_primed_tests!(u16, bench_primed_10000, 10_000);
-        generate_primed_tests!(u16, bench_primed_65535, 65_535);
+        // generate_primed_tests!(u16, bench_primed_100, 100, "bench_primed_100");
+        // generate_primed_tests!(u16, bench_primed_1000, 1000, "bench_primed_1000");
+        // generate_primed_tests!(u16, bench_primed_10000, 10_000, "bench_primed_10000");
+        // generate_primed_tests!(u16, bench_primed_65535, 65_535, "bench_primed_65535");
     }
 
-    mod u32 {
-        use super::*;
+    // mod u32 {
+    //     use super::*;
+    //     use criterion::Criterion;
 
-        generate_tests!(u32, bench_insert_100, 100);
-        generate_tests!(u32, bench_insert_1000, 1000);
-        generate_tests!(u32, bench_insert_10000, 10_000);
-        generate_tests!(u32, bench_insert_100000, 100_000);
+    //     generate_tests!(u32, bench_insert_100, 100, "bench_insert_100");
+    //     generate_tests!(u32, bench_insert_1000, 1000, "bench_insert_1000");
+    //     generate_tests!(u32, bench_insert_10000, 10_000, "bench_insert_10000");
+    //     generate_tests!(u32, bench_insert_100000, 100_000, "bench_insert_100000");
 
-        generate_primed_tests!(u32, bench_primed_100, 100);
-        generate_primed_tests!(u32, bench_primed_1000, 1000);
-        generate_primed_tests!(u32, bench_primed_10000, 10_000);
-        generate_primed_tests!(u32, bench_primed_65535, 65_535);
-    }
+    //     generate_primed_tests!(u32, bench_primed_100, 100, "bench_primed_100");
+    //     generate_primed_tests!(u32, bench_primed_1000, 1000, "bench_primed_1000");
+    //     generate_primed_tests!(u32, bench_primed_10000, 10_000, "bench_primed_10000");
+    //     generate_primed_tests!(u32, bench_primed_65535, 65_535, "bench_primed_65535");
+    // }
 
 }
