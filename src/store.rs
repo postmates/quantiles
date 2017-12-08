@@ -58,7 +58,12 @@ where
         }
         let item = self.data[outer_idx].remove(idx);
         self.len -= 1;
-        // TODO merge inner stores if two will fit into a single inner_cap
+        if (self.data.len() > 2) && (outer_idx < (self.data.len() - 2)) {
+            if self.data[outer_idx].len() + self.data[outer_idx+1].len() < self.inner_cap {
+                let mut rhs = self.data.remove(outer_idx+1);
+                self.data[outer_idx].append(&mut rhs);
+            }
+        }
         item
     }
 

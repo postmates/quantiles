@@ -76,8 +76,7 @@ where
     // occasionally merged. The outlined implementation uses a linked list but
     // we prefer a Vec for reasons of cache locality at the cost of worse
     // computational complexity.
-    // samples: Store<Entry<T>>,
-    samples: Vec<Entry<T>>,
+    samples: Store<Entry<T>>,
 
     sum: Option<T>,
     cma: Option<f64>,
@@ -188,8 +187,7 @@ impl<
             insert_threshold: insert_threshold,
             inserts: 0,
 
-            //lsamples: Store::new(),
-            samples: Vec::new(),
+            samples: Store::new(),
 
             last_in: None,
             sum: None,
