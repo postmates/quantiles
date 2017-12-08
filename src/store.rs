@@ -1,4 +1,5 @@
-use std::{fmt, mem};
+// use std::{fmt, mem};
+use std::fmt;
 use std::ops::{Index, IndexMut};
 
 #[derive(Clone, PartialEq, Debug)]
@@ -16,7 +17,7 @@ where
     T: PartialEq,
 {
     pub fn new() -> Store<T> {
-        let inner_cap = (mem::size_of::<usize>() * 32) / mem::size_of::<T>(); // align to cache size
+        let inner_cap = 4096;
         assert!(inner_cap != 0);
         let data = vec![Vec::with_capacity(inner_cap)];
         Store {
@@ -26,7 +27,7 @@ where
         }
     }
 
-    pub fn insert(&mut self, index: usize, element: T) -> () {
+    pub fn insert(&mut self, index: usize, element: T) -> () where T: fmt::Debug {
         debug_assert!(index <= self.len, "insert");
         // Seek forward and find our place for insertion.
         let mut outer_idx = 0;
@@ -55,7 +56,6 @@ where
             idx -= self.data[outer_idx].len();
             outer_idx += 1;
         }
-        // println!("INNER: {:?} | LEN: {} | IDX: {}", self.data[outer_idx], self.data[outer_idx].len(), idx);
         let item = self.data[outer_idx].remove(idx);
         self.len -= 1;
         // TODO merge inner stores if two will fit into a single inner_cap
@@ -88,7 +88,7 @@ where
 
         let mut outer_idx = 0;
         let mut idx = index;
-        while idx > self.data[outer_idx].len() {
+        while idx >= self.data[outer_idx].len() {
             idx -= self.data[outer_idx].len();
             outer_idx += 1;
         }
@@ -107,7 +107,7 @@ where
 
         let mut outer_idx = 0;
         let mut idx = index;
-        while idx > self.data[outer_idx].len() {
+        while idx >= self.data[outer_idx].len() {
             idx -= self.data[outer_idx].len();
             outer_idx += 1;
         }
@@ -210,6 +210,94 @@ mod test {
 
             for tup in standard.iter().zip(test_article.iter()) {
                 assert_eq!(tup.0, tup.1)
+            }
+
+            return TestResult::passed();
+        }
+        QuickCheck::new().quickcheck(inner as fn(Vec<Actions>) -> TestResult);
+    }
+
+    #[test]
+    fn mut_index_genuine_article() {
+        fn inner(actions: Vec<Actions>) -> TestResult {
+            let mut standard = Vec::new();
+            let mut test_article = Store::new();
+
+            for action in actions {
+                match action {
+                    Actions::Insert { index, value } => {
+                        if (index as usize) > test_article.len() {
+                            assert!((index as usize) > standard.len());
+                            continue;
+                        }
+                        standard.insert((index as usize), value);
+                        test_article.insert((index as usize), value);
+                        assert_eq!(standard.len(), test_article.len());
+                    }
+                    Actions::Remove { index } => {
+                        assert_eq!(standard.len(), test_article.len());
+                        if test_article.is_empty() {
+                            assert!(standard.is_empty());
+                        } else if (index as usize) >= test_article.len() {
+                            assert!((index as usize) >= standard.len());
+                        } else {
+                            debug_assert_eq!(
+                                standard.remove((index as usize)),
+                                test_article.remove((index as usize)),
+                                "genuine_article_remove"
+                            );
+                        }
+                        assert_eq!(standard.len(), test_article.len());
+                    }
+                }
+            }
+
+            for i in 0..standard.len() {
+                assert_eq!(standard.index_mut(i), test_article.index_mut(i));
+            }
+
+            return TestResult::passed();
+        }
+        QuickCheck::new().quickcheck(inner as fn(Vec<Actions>) -> TestResult);
+    }
+
+    #[test]
+    fn index_genuine_article() {
+        fn inner(actions: Vec<Actions>) -> TestResult {
+            let mut standard = Vec::new();
+            let mut test_article = Store::new();
+
+            for action in actions {
+                match action {
+                    Actions::Insert { index, value } => {
+                        if (index as usize) > test_article.len() {
+                            assert!((index as usize) > standard.len());
+                            continue;
+                        }
+                        standard.insert((index as usize), value);
+                        test_article.insert((index as usize), value);
+                        assert_eq!(standard.len(), test_article.len());
+                    }
+                    Actions::Remove { index } => {
+                        assert_eq!(standard.len(), test_article.len());
+                        if test_article.is_empty() {
+                            assert!(standard.is_empty());
+                        } else if (index as usize) >= test_article.len() {
+                            assert!((index as usize) >= standard.len());
+                        } else {
+                            debug_assert_eq!(
+                                standard.remove((index as usize)),
+                                test_article.remove((index as usize)),
+                                "genuine_article_remove"
+                            );
+                        }
+                        assert_eq!(standard.len(), test_article.len());
+                    }
+                }
+            }
+
+            for i in 0..standard.len() {
+                assert_eq!(standard.index(i), test_article.index(i));
             }
 
             return TestResult::passed();
