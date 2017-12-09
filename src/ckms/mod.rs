@@ -44,7 +44,6 @@ where
     // computational complexity.
     samples: Store<T>,
 
-    sum: Option<T>,
     cma: Option<f64>,
     last_in: Option<T>,
 }
@@ -61,12 +60,6 @@ where
 {
     fn add_assign(&mut self, rhs: CKMS<T>) {
         self.last_in = rhs.last_in;
-        self.sum = match (self.sum, rhs.sum) {
-            (None, None) => None,
-            (None, Some(y)) => Some(y),
-            (Some(x), None) => Some(x),
-            (Some(x), Some(y)) => Some(x.add(y)),
-        };
         self.cma = match (self.cma, rhs.cma) {
             (None, None) => None,
             (None, Some(y)) => Some(y),
@@ -147,7 +140,6 @@ impl<
             samples: Store::new(2048, error),
 
             last_in: None,
-            sum: None,
             cma: None,
         }
     }
@@ -166,22 +158,6 @@ impl<
     /// ```
     pub fn last(&self) -> Option<T> {
         self.last_in
-    }
-
-    /// Return the sum of the elements added to the CKMS
-    ///
-    /// # Example
-    /// ```
-    /// use quantiles::ckms::CKMS;
-    ///
-    /// let mut ckms = CKMS::new(0.1);
-    /// ckms.insert(1.0);
-    /// ckms.insert(2.0);
-    /// ckms.insert(3.0);
-    /// assert_eq!(Some(6.0), ckms.sum());
-    /// ```
-    pub fn sum(&self) -> Option<T> {
-        self.sum
     }
 
     /// Return the cummulative moving average of the elements added to the CKMS
@@ -220,7 +196,6 @@ impl<
     /// may grow gradually, as defined in the module-level documentation, but
     /// will remain bounded.
     pub fn insert(&mut self, v: T) {
-        self.sum = self.sum.map_or(Some(v), |s| Some(s.add(v)));
         self.last_in = Some(v);
         self.n += 1;
         let v_f64: f64 = v.into();
@@ -490,34 +465,6 @@ mod test {
             TestResult::passed()
         }
         QuickCheck::new().quickcheck(inner as fn(Vec<i32>, Vec<i32>) -> TestResult);
-    }
-
-    #[test]
-    fn add_assign_test() {
-        fn inner(pair: (i32, i32)) -> bool {
-            let mut lhs = CKMS::<i32>::new(0.001);
-            lhs.insert(pair.0);
-            let mut rhs = CKMS::<i32>::new(0.001);
-            rhs.insert(pair.1);
-
-            let expected: i32 = pair.0 + pair.1;
-            lhs += rhs;
-
-            if let Some(x) = lhs.sum() {
-                if x == expected {
-                    if let Some(y) = lhs.last() {
-                        y == pair.1
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-        }
-        QuickCheck::new().quickcheck(inner as fn((i32, i32)) -> bool);
     }
 
     // prop: forany phi. (phi*n - f(phi*n, n)/2) =< r_i =< (phi*n + f(phi*n, n)/2)

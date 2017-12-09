@@ -32,7 +32,7 @@ where
     pub fn split_off(&mut self, index: usize) -> Self {
         assert!(index < self.data.len());
         let nxt = self.data.split_off(index);
-        let nxt_g_sum = nxt.iter().fold(0, |acc, ref x| acc + x.g);
+        let nxt_g_sum = nxt.iter().fold(0, |acc, x| acc + x.g);
         self.g_sum -= nxt_g_sum;
         Inner {
             data: nxt,
@@ -163,7 +163,7 @@ where
             Entry {
                 v: element,
                 g: 1,
-                delta: invariant(r as f64, self.error) - 1,
+                delta: invariant(f64::from(r), self.error) - 1,
             },
         );
         self.data[outer_idx].g_sum += 1;
@@ -228,7 +228,7 @@ where
             let nxt_g = self.data[nxt_outer_idx][nxt_inner_idx].g;
             let nxt_delta = self.data[nxt_outer_idx][nxt_inner_idx].delta;
 
-            if cur_g + nxt_g + nxt_delta <= invariant(r as f64, self.error) {
+            if cur_g + nxt_g + nxt_delta <= invariant(f64::from(r), self.error) {
                 self.data[cur_outer_idx][cur_inner_idx].v = nxt_v;
                 self.data[cur_outer_idx][cur_inner_idx].g += nxt_g;
                 self.data[cur_outer_idx][cur_inner_idx].delta = nxt_delta;
@@ -257,7 +257,21 @@ where
             r += 1;
         }
 
-        // TODO combine inners that will fit inside the cap
+        // It's possible after several compression passes that we'll leave tiny
+        // inner caches in place. We don't want this. We'll move pairwise
+        // through the inner caches and combine those that are contiguous and
+        // fit within inner_cap.
+        cur_outer_idx = 0;
+        while (self.data.len() >= 1) && (cur_outer_idx < (self.data.len() - 1)) {
+            if self.data[cur_outer_idx].data.len() + self.data[cur_outer_idx + 1].data.len() <= self.inner_cap {
+                let mut nxt = self.data.remove(cur_outer_idx+1);
+                let cur = &mut self.data[cur_outer_idx];
+                cur.g_sum += nxt.g_sum;
+                cur.data.append(&mut nxt.data);
+            } else {
+                cur_outer_idx += 1;
+            }
+        }
     }
 
     pub fn query(&self, q: f64) -> Option<(usize, T)> {
@@ -276,10 +290,10 @@ where
 
             r += prev.g;
 
-            let lhs = (r + cur.g + cur.delta) as f64;
+            let lhs = f64::from(r + cur.g + cur.delta);
 
             let inv = invariant(nphi, self.error);
-            let rhs = nphi + ((inv as f64) / 2.0);
+            let rhs = nphi + (f64::from(inv) / 2.0);
 
             if lhs > rhs {
                 return Some((r as usize, prev.v));
@@ -304,7 +318,7 @@ impl<T> IndexMut<usize> for Inner<T>
 where
     T: PartialEq,
 {
-    fn index_mut<'a>(&'a mut self, index: usize) -> &'a mut Entry<T> {
+    fn index_mut(&mut self, index: usize) -> &mut Entry<T> {
         &mut self.data[index]
     }
 }
@@ -315,7 +329,7 @@ where
 {
     type Output = Entry<T>;
 
-    fn index<'a>(&'a self, index: usize) -> &'a Self::Output {
+    fn index(&self, index: usize) -> &Self::Output {
         &self.data[index]
     }
 }
@@ -324,7 +338,7 @@ impl<T> IndexMut<usize> for Store<T>
 where
     T: PartialEq + PartialOrd + Copy,
 {
-    fn index_mut<'a>(&'a mut self, index: usize) -> &'a mut Entry<T> {
+    fn index_mut(&mut self, index: usize) -> &mut Entry<T> {
         let mut outer_idx = 0;
         let mut idx = index;
         while idx >= self.data[outer_idx].len() {
