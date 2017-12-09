@@ -8,7 +8,7 @@ pub struct Inner<T>
 where
     T: PartialEq,
 {
-    data: Vec<Entry<T>>,
+    pub data: Vec<Entry<T>>,
     g_sum: u32,
 }
 
@@ -52,7 +52,7 @@ where
     // queries for all quantiles will have the same error factor.
     pub error: f64,
 
-    data: Vec<Inner<T>>,
+    pub data: Vec<Inner<T>>,
     inner_cap: usize,
     len: usize, // samples currently stored
     n: usize,   // total samples ever stored

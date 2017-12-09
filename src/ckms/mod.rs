@@ -59,30 +59,31 @@ where
         + Debug
         + std::convert::Into<f64>,
 {
-    fn add_assign(&mut self, _rhs: CKMS<T>) {
-        unimplemented!();
-        // self.last_in = rhs.last_in;
-        // self.sum = match (self.sum, rhs.sum) {
-        //     (None, None) => None,
-        //     (None, Some(y)) => Some(y),
-        //     (Some(x), None) => Some(x),
-        //     (Some(x), Some(y)) => Some(x.add(y)),
-        // };
-        // self.cma = match (self.cma, rhs.cma) {
-        //     (None, None) => None,
-        //     (None, Some(y)) => Some(y),
-        //     (Some(x), None) => Some(x),
-        //     (Some(x), Some(y)) => {
-        //         let x_n: f64 = self.n as f64;
-        //         let y_n: f64 = rhs.n as f64;
-        //         Some(((x_n * x) + (y_n * y)) / (x_n + y_n))
-        //     }
-        // };
-        // self.n += rhs.n;
-        // for v in rhs.samples.iter().map(|x| x.v) {
-        //     self.merge(v);
-        // }
-        // self.compress();
+    fn add_assign(&mut self, rhs: CKMS<T>) {
+        self.last_in = rhs.last_in;
+        self.sum = match (self.sum, rhs.sum) {
+            (None, None) => None,
+            (None, Some(y)) => Some(y),
+            (Some(x), None) => Some(x),
+            (Some(x), Some(y)) => Some(x.add(y)),
+        };
+        self.cma = match (self.cma, rhs.cma) {
+            (None, None) => None,
+            (None, Some(y)) => Some(y),
+            (Some(x), None) => Some(x),
+            (Some(x), Some(y)) => {
+                let x_n: f64 = self.n as f64;
+                let y_n: f64 = rhs.n as f64;
+                Some(((x_n * x) + (y_n * y)) / (x_n + y_n))
+            }
+        };
+        self.n += rhs.n;
+        for inner in rhs.samples.data {
+            for v in inner.data.iter().map(|x| x.v) {
+                self.samples.insert(v);
+            }
+        }
+        self.compress();
     }
 }
 
@@ -232,58 +233,6 @@ impl<
         }
     }
 
-    // fn merge(&mut self, v: T) {
-    //     if self.samples.is_empty() {
-    //         self.samples.insert(
-    //             0,
-    //             Entry {
-    //                 v: v,
-    //                 g: 1,
-    //                 delta: 0,
-    //             },
-    //         );
-    //         return;
-    //     } else {
-    //         let (idx, delta) = if self.samples[0].v >= v {
-    //             // inserting at the front
-    //             (0, 0)
-    //         } else if self.samples[self.samples.len() - 1].v < v {
-    //             // inserting at the back
-    //             (self.samples.len(), 0)
-    //         } else {
-    //             // inserting somewhere in the middle
-    //             let mut idx = 0;
-    //             let mut r = 0;
-    //             for smpl in self.samples.iter() {
-    //                 match smpl.v.partial_cmp(&v).unwrap() {
-    //                     cmp::Ordering::Less => {
-    //                         idx += 1;
-    //                         r += smpl.g
-    //                     }
-    //                     _ => break,
-    //                 }
-    //             }
-    //             // To insert in the middle we have to know two things:
-    //             //
-    //             //  * the correct point of insertion, 'idx'
-    //             //  * the sum of all Entry.g prior to 'idx', called 'r'
-    //             //
-    //             // We could avoid the 'idx' computation if we could get at 'r'
-    //             // some other way.
-    //             (idx, invariant(r as f64, self.error) - 1)
-    //         };
-
-    //         self.samples.insert(
-    //             idx,
-    //             Entry {
-    //                 v: v,
-    //                 g: 1,
-    //                 delta: delta,
-    //             },
-    //         );
-    //     }
-    // }
-
     /// Query CKMS for a ε-approximate quantile
     ///
     /// This function returns an approximation to the true quantile-- +/- εΦn
@@ -331,25 +280,31 @@ impl<
         self.n
     }
 
-    // /// Retrieve a representative vector of points
-    // ///
-    // /// This function returns a represenative sample of points from the
-    // /// CKMS. Doing so consumes the CKMS.
-    // ///
-    // /// # Examples
-    // /// ```
-    // /// use quantiles::ckms::CKMS;
-    // ///
-    // /// let mut ckms = CKMS::<u32>::new(0.1);
-    // /// for i in 0..10 {
-    // ///     ckms.insert(i as u32);
-    // /// }
-    // ///
-    // /// assert_eq!(ckms.into_vec(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    // /// ```
-    // pub fn into_vec(self) -> Vec<T> {
-    //     self.samples.iter().map(|ent| ent.v).collect()
-    // }
+    /// Retrieve a representative vector of points
+    ///
+    /// This function returns a represenative sample of points from the
+    /// CKMS. Doing so consumes the CKMS.
+    ///
+    /// # Examples
+    /// ```
+    /// use quantiles::ckms::CKMS;
+    ///
+    /// let mut ckms = CKMS::<u32>::new(0.1);
+    /// for i in 0..10 {
+    ///     ckms.insert(i as u32);
+    /// }
+    ///
+    /// assert_eq!(ckms.into_vec(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    /// ```
+    pub fn into_vec(self) -> Vec<T> {
+        let mut res = vec![];
+        for inner in self.samples.data {
+            for v in inner.data.iter().map(|x| x.v) {
+                res.push(v);
+            }
+        }
+        res
+    }
 
     fn compress(&mut self) {
         self.samples.compress();
@@ -393,7 +348,6 @@ mod test {
         QuickCheck::new().quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
 
-    /*
     #[test]
     fn test_cma_add_assign() {
         fn inner(l_data: Vec<f64>, r_data: Vec<f64>, err: f64) -> TestResult {
@@ -421,7 +375,6 @@ mod test {
         }
         QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
     }
-    */
 
     #[test]
     fn error_nominal_test() {
@@ -517,7 +470,6 @@ mod test {
         QuickCheck::new().quickcheck(n_invariant as fn(Vec<i32>) -> bool);
     }
 
-    /*
     #[test]
     fn count_sum_test() {
         fn inner(lhs: Vec<i32>, rhs: Vec<i32>) -> TestResult {
@@ -567,7 +519,6 @@ mod test {
         }
         QuickCheck::new().quickcheck(inner as fn((i32, i32)) -> bool);
     }
-    */
 
     // prop: forany phi. (phi*n - f(phi*n, n)/2) =< r_i =< (phi*n + f(phi*n, n)/2)
     #[test]
