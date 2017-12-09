@@ -72,8 +72,8 @@ mod ckms {
 
         // generate_tests!(u16, bench_insert_100, 100, "bench_insert_100");
         // generate_tests!(u16, bench_insert_1000, 1000, "bench_insert_1000");
-        generate_tests!(u16, bench_insert_10000, 10_000, "bench_insert_10000");
-        // generate_tests!(u16, bench_insert_65535, 65_535, "bench_insert_65535");
+        // generate_tests!(u16, bench_insert_10000, 10_000, "bench_insert_10000");
+        generate_tests!(u16, bench_insert_65535, 65_535, "bench_insert_65535");
 
         // generate_primed_tests!(u16, bench_primed_100, 100, "bench_primed_100");
         // generate_primed_tests!(u16, bench_primed_1000, 1000, "bench_primed_1000");
