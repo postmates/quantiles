@@ -23,4 +23,3 @@ pub mod misra_gries;
 pub mod greenwald_khanna;
 pub mod ckms;
 pub mod histogram;
-mod store;
