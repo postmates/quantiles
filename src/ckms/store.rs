@@ -1,8 +1,46 @@
+//! store - a 'poor man's skiplist' for CKMS
+//!
+//! The CKMS requires a storage data structure that has cheap inserts and
+//! constant-ish loookups. That's because:
+//!
+//!  * insertion implies search
+//!  * compression implies search, shifting of data
+//!  * query is search
+//!
+//! Prior to 0.7 CKMS used a Vec for storing its samples. This worked well
+//! enough for small collections of samples, but fell over once you got past
+//! around 50k on account of the expense of shifting data around, performing a
+//! search for every insert.
+//!
+//! What we've done in this module is build a "poor man's" skiplist --
+//! constructed of nested Vecs of bounded sized -- which contains at each 'node'
+//! all the information we need to perform an insert, as if we had examined
+//! every sample in the block. Anyhow, we'll get into it below.
 use std::fmt;
 use std::ops::{Index, IndexMut};
 
 use ckms::entry::Entry;
 
+/// The all-important CKMS invariant.
+pub fn invariant(r: f64, error: f64) -> u32 {
+    let i = (2.0 * error * r).floor() as u32;
+    if i == 0 {
+        1
+    } else {
+        i
+    }
+}
+
+/// Inner is the 'node' of our poor-man's skiplist. Each Inner stores a block of
+/// samples of bounded size -- controlled by `inner_cap` set on `Store` -- and a
+/// `g_sum`. The CKMS algorithm requires samples to be stored in sorted order
+/// and the insertion procedure builds up a `g_sum`, a sum of the ranks of each
+/// sample seen. To avoid re-computing this `g_sum` as we search for our
+/// insertion spot we instead keep a `g_sum` on Inner, meaning if we determine
+/// that the block will not be inserted into we can just pull `g_sum` and avoid
+/// inspecting every sample in the block. This implies a touch more work on
+/// every insertion but we come out well ahead not inspecting every sample, even
+/// so.
 #[derive(Clone, PartialEq, Debug)]
 #[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct Inner<T>
@@ -13,15 +51,6 @@ where
     g_sum: u32,
 }
 
-pub fn invariant(r: f64, error: f64) -> u32 {
-    let i = (2.0 * error * r).floor() as u32;
-    if i == 0 {
-        1
-    } else {
-        i
-    }
-}
-
 impl<T> Inner<T>
 where
     T: PartialEq + PartialOrd + Copy,
@@ -30,6 +59,14 @@ where
         self.data.len()
     }
 
+    /// split_off is patterned on the operation of `Vec::split_off`.
+    ///
+    /// The notion here is when an Inner goes over `Store::inner_cap` we need to
+    /// split the samples that fall over `inner_cap` into a new Inner. This
+    /// keeps our `inner_cap` bound going and reduces the O(n) burden of
+    /// inserting into a Vec.
+    ///
+    /// The correct `g_sum` is maintained for both sides in the split.
     pub fn split_off(&mut self, index: usize) -> Self {
         assert!(index < self.data.len());
         let nxt = self.data.split_off(index);
@@ -48,14 +85,16 @@ pub struct Store<T>
 where
     T: PartialEq,
 {
-    // We aim for the full biased quantiles method. The paper this
-    // implementation is based on includes a 'targeted' method but the authors
-    // have granted that it is flawed in private communication. As such, all
-    // queries for all quantiles will have the same error factor.
+    /// The way CKMS works, we are allowed to respond back to a user query
+    /// inaccurately. Just, with known inaccuracy. That's what this is, the
+    /// known inaccuracy. What's neat is we can perform compression on the
+    /// stored samples so long as we keep within this error bound.
     pub error: f64,
 
+    /// Our collction of samples. See documentation of Inner for more details.
     pub data: Vec<Inner<T>>,
-    inner_cap: usize,
+
+    inner_cap: usize, // maximum size of an Inner
     len: usize, // samples currently stored
     n: usize,   // total samples ever stored
 }
@@ -79,10 +118,26 @@ where
         }
     }
 
+    /// Insert a point into the Store
     pub fn insert(&mut self, element: T) -> ()
     where
         T: fmt::Debug,
     {
+        // This function is a touch repetative. There are three possible
+        // conditions when we insert a point:
+        //
+        //  * point goes to the front
+        //  * point goes to the back
+        //  * point goes somewhere in the middle
+        //
+        // Insertion into the middle is the most expensive. A point inserted at
+        // the front or back has a 'delta' -- see the referenced paper for full
+        // details -- of 0. A point that goes into the middle has a delta
+        // derived from the invariant, the rank of the inserted sample. That
+        // implies a search. This store is able to skip a linear seek by
+        // examining the max element of Inner caches, their associated maximum
+        // rank, g_sum.
+
         // insert at the front
         if self.data[0].data.is_empty() || (self.data[0].data[0].v >= element) {
             self.data[0].data.insert(
