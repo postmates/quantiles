@@ -597,12 +597,14 @@ mod test {
             ckms.compress();
 
             let s = ckms.samples.len() as i64;
-            let bound = ((1.0 / ckms.error_bound()) * (ckms.error_bound() * (ckms.count() as f64)).log10().powi(2)).ceil() as i64;
+            let bound = ((1.0 / ckms.error_bound())
+                * (ckms.error_bound() * (ckms.count() as f64)).log10().powi(2))
+                .ceil() as i64;
 
             // We have to choose an arbitrary, lowish constant for bound
             // invalidation buffer. This is because I don't have a precise
             // boundary. 1024 samples worth of slop isn't bad, I guess.
-            if !(s <= bound) && !((s - bound).abs() < 1_024) { 
+            if !(s <= bound) && !((s - bound).abs() < 1_024) {
                 println!(
                     "error: {:?} n: {:?} log10: {:?}",
                     ckms.error_bound(),

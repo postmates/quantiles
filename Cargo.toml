@@ -15,7 +15,6 @@ keywords = ["statistics", "histogram", "quantiles", "percentiles", "approximatio
 lto = true
 
 [dev-dependencies]
-criterion = "0.1"
 quickcheck = "0.5"
 
 [dependencies]

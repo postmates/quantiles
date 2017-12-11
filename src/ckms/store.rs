@@ -4,6 +4,7 @@ use std::ops::{Index, IndexMut};
 use ckms::entry::Entry;
 
 #[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct Inner<T>
 where
     T: PartialEq,
@@ -42,6 +43,7 @@ where
 }
 
 #[derive(Clone, PartialEq, Debug)]
+#[cfg_attr(feature = "serde_support", derive(Serialize, Deserialize))]
 pub struct Store<T>
 where
     T: PartialEq,
@@ -263,8 +265,10 @@ where
         // fit within inner_cap.
         cur_outer_idx = 0;
         while (self.data.len() >= 1) && (cur_outer_idx < (self.data.len() - 1)) {
-            if self.data[cur_outer_idx].data.len() + self.data[cur_outer_idx + 1].data.len() <= self.inner_cap {
-                let mut nxt = self.data.remove(cur_outer_idx+1);
+            if self.data[cur_outer_idx].data.len() + self.data[cur_outer_idx + 1].data.len()
+                <= self.inner_cap
+            {
+                let mut nxt = self.data.remove(cur_outer_idx + 1);
                 let cur = &mut self.data[cur_outer_idx];
                 cur.g_sum += nxt.g_sum;
                 cur.data.append(&mut nxt.data);
