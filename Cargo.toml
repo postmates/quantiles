@@ -1,6 +1,6 @@
 [package]
 name = "quantiles"
-version = "0.6.3"
+version = "0.7.0-pre"
 authors = ["Brian L. Troutwine <blt@postmates.com>"]
 
 description = "a collection of approximate quantile algorithms"
@@ -15,7 +15,7 @@ keywords = ["statistics", "histogram", "quantiles", "percentiles", "approximatio
 lto = true
 
 [dev-dependencies]
-quickcheck = "0.4"
+quickcheck = "0.5"
 
 [dependencies]
 serde = { version = "1.0", optional = true }
