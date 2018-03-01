@@ -88,7 +88,8 @@ impl<
         + Sub<Output = T>
         + Div<Output = T>
         + std::convert::Into<f64>,
-> CKMS<T> {
+> CKMS<T>
+{
     /// Create a new CKMS
     ///
     /// A CKMS is meant to answer quantile queries with a known error bound. If
@@ -211,9 +212,11 @@ impl<
     /// Query CKMS for a ε-approximate quantile
     ///
     /// This function returns an approximation to the true quantile-- +/- εΦn
-    /// --for the points inserted. Argument q is valid 0. <= q <= 1.0. The
-    /// minimum and maximum quantile, corresponding to 0.0 and 1.0 respectively,
-    /// are always known precisely.
+    /// --for the points inserted. Argument q is valid 0. <= q <= 1.0. The first
+    /// element of the return tuple is the rank estimation for q, the second
+    /// element is the quantile estimation for q. The minimum and maximum
+    /// quantile, corresponding to 0.0 and 1.0 respectively, are always known
+    /// precisely.
     ///
     /// Return
     ///
@@ -289,9 +292,9 @@ impl<
 #[cfg(test)]
 mod test {
     use super::*;
+    use ckms::store::invariant;
     use quickcheck::{QuickCheck, TestResult};
     use std::f64::consts::E;
-    use ckms::store::invariant;
 
     fn percentile(data: &Vec<f64>, prcnt: f64) -> f64 {
         let idx = (prcnt * (data.len() as f64)) as usize;
@@ -348,7 +351,8 @@ mod test {
             }
             return TestResult::passed();
         }
-        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
+        QuickCheck::new()
+            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
     }
 
     #[test]
@@ -427,7 +431,8 @@ mod test {
                 TestResult::failed()
             }
         }
-        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
+        QuickCheck::new()
+            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
     }
 
     #[test]
@@ -484,17 +489,20 @@ mod test {
             }
 
             match ckms.query(phi) {
-                None => TestResult::passed(), // invariant to check here? n*phi + f > 1?
+                None => TestResult::passed(), /* invariant to check here? n*phi +
+                                                * f > 1? */
                 Some((rank, _)) => {
                     let nphi = phi * (ckms.n as f64);
                     let fdiv2 = (invariant(nphi, error) as f64) / 2.0;
                     TestResult::from_bool(
-                        ((nphi - fdiv2) <= (rank as f64)) || ((rank as f64) <= (nphi + fdiv2)),
+                        ((nphi - fdiv2) <= (rank as f64))
+                            || ((rank as f64) <= (nphi + fdiv2)),
                     )
                 }
             }
         }
-        QuickCheck::new().quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
+        QuickCheck::new()
+            .quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -507,7 +515,6 @@ mod test {
         assert_eq!(0.0, ckms.samples[0].v);
         assert_eq!(1.0, ckms.samples[1].v);
     }
-
 
     // prop: v_i-1 < v_i =< v_i+1
     #[test]
