@@ -76,6 +76,7 @@
 //! ```
 
 use std::cmp;
+use std::ops::AddAssign;
 
 /// Locates the proper position of v in a vector vs
 /// such that when v is inserted at position i,
@@ -315,6 +316,98 @@ where
     }
 }
 
+impl<T: Ord> AddAssign for Stream<T> {
+    fn add_assign(&mut self, rhs: Self) {
+        // The GK algorithm is a bit unclear about it, but we need to adjust the statistics during the
+        // merging. The main idea is that samples that come from one side will suffer from the lack of
+        // precision of the other.
+        // As a concrete example, take two QuantileSummaries whose samples (value, g, delta) are:
+        // `a = [(0, 1, 0), (20, 99, 0)]` and `b = [(10, 1, 0), (30, 49, 0)]`
+        // This means `a` has 100 values, whose minimum is 0 and maximum is 20,
+        // while `b` has 50 values, between 10 and 30.
+        // The resulting samples of the merge will be:
+        // a+b = [(0, 1, 0), (10, 1, ??), (20, 99, ??), (30, 49, 0)]
+        // The values of `g` do not change, as they represent the minimum number of values between two
+        // consecutive samples. The values of `delta` should be adjusted, however.
+        // Take the case of the sample `10` from `b`. In the original stream, it could have appeared
+        // right after `0` (as expressed by `g=1`) or right before `20`, so `delta=99+0-1=98`.
+        // In the GK algorithm's style of working in terms of maximum bounds, one can observe that the
+        // maximum additional uncertainty over samples comming from `b` is `max(g_a + delta_a) =
+        // floor(2 * eps_a * n_a)`. Likewise, additional uncertainty over samples from `a` is
+        // `floor(2 * eps_b * n_b)`.
+        // Only samples that interleave the other side are affected. That means that samples from
+        // one side that are lesser (or greater) than all samples from the other side are just copied
+        // unmodifed.
+        // If the merging instances have different `relativeError`, the resulting instance will cary
+        // the largest one: `eps_ab = max(eps_a, eps_b)`.
+        // The main invariant of the GK algorithm is kept:
+        // `max(g_ab + delta_ab) <= floor(2 * eps_ab * (n_a + n_b))` since
+        // `max(g_ab + delta_ab) <= floor(2 * eps_a * n_a) + floor(2 * eps_b * n_b)`
+        // Finally, one can see how the `insert(x)` operation can be expressed as `merge([(x, 1, 0])`
+
+        let mut merged_summary = Vec::with_capacity(self.summary.len() + rhs.summary.len());
+        let merged_epsilon = self.epsilon.max(rhs.epsilon);
+        let merged_n = self.n + rhs.n;
+        let additional_self_delta = (2. * rhs.epsilon * rhs.n as f64).floor() as usize;
+        let additional_rhs_delta = (2. * self.epsilon * self.n as f64).floor() as usize;
+
+        // Do a merge of two sorted lists until one of the lists is fully consumed
+        let mut self_samples = std::mem::replace(&mut self.summary, Vec::new())
+            .into_iter()
+            .peekable();
+        let mut rhs_samples = rhs.summary.into_iter().peekable();
+        let mut started_self = false;
+        let mut started_rhs = false;
+        loop {
+            match (self_samples.peek(), rhs_samples.peek()) {
+                (Some(self_sample), Some(rhs_sample)) => {
+                    // Detect next sample
+                    let (next_sample, additional_delta) = if self_sample.v < rhs_sample.v {
+                        started_self = true;
+                        (
+                            self_samples.next().unwrap(),
+                            if started_rhs {
+                                additional_self_delta
+                            } else {
+                                0
+                            },
+                        )
+                    } else {
+                        started_rhs = true;
+                        (
+                            rhs_samples.next().unwrap(),
+                            if started_self {
+                                additional_rhs_delta
+                            } else {
+                                0
+                            },
+                        )
+                    };
+
+                    // Insert it
+                    let next_sample = Tuple {
+                        v: next_sample.v,
+                        g: next_sample.g,
+                        delta: next_sample.delta + additional_delta,
+                    };
+                    merged_summary.push(next_sample);
+                }
+                _ => break,
+            }
+        }
+
+        // Copy the remaining samples from the rhs list
+        // (by construction, at most one `while` loop will run)
+        merged_summary.extend(self_samples);
+        merged_summary.extend(rhs_samples);
+
+        self.summary = merged_summary;
+        self.epsilon = merged_epsilon;
+        self.n = merged_n;
+        self.compress();
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -366,6 +459,28 @@ mod test {
         for phi in 0..100 {
             assert!(quantile_in_bounds(
                 1..1001,
+                &stream,
+                (phi as f64) / 100f64,
+                epsilon
+            ));
+        }
+    }
+
+    #[test]
+    fn test_add_assign() {
+        let epsilon = 0.01;
+
+        let mut stream = Stream::new(epsilon);
+        let mut stream2 = Stream::new(epsilon);
+
+        for i in 0..1000 {
+            stream.insert(2 * i);
+            stream2.insert(2 * i + 1);
+        }
+
+        for phi in 0..100 {
+            assert!(quantile_in_bounds(
+                0..2000,
                 &stream,
                 (phi as f64) / 100f64,
                 epsilon
