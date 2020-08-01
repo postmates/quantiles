@@ -11,7 +11,7 @@ mod ckms {
 
     impl Xorshift {
         pub fn new(seed: u64) -> Xorshift {
-            Xorshift { seed: seed }
+            Xorshift { seed }
         }
 
         pub fn next_val(&mut self) -> u32 {

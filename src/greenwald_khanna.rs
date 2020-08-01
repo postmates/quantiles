@@ -141,11 +141,7 @@ where
 {
     /// Creates a new instance of a Tuple
     pub fn new(v: T, g: usize, delta: usize) -> Tuple<T> {
-        Tuple {
-            v: v,
-            g: g,
-            delta: delta,
-        }
+        Tuple { v, g, delta }
     }
 }
 
@@ -191,7 +187,7 @@ where
     pub fn new(epsilon: f64) -> Stream<T> {
         Stream {
             summary: vec![],
-            epsilon: epsilon,
+            epsilon,
             n: 0,
         }
     }
@@ -221,7 +217,7 @@ where
     /// Compute the epsilon-approximate phi-quantile
     /// from the summary data structure.
     pub fn quantile(&self, phi: f64) -> &T {
-        assert!(self.summary.len() >= 1);
+        assert!(!self.summary.is_empty());
         assert!(phi >= 0f64 && phi <= 1f64);
 
         let r = (phi * self.n as f64).floor() as usize;
@@ -358,42 +354,38 @@ impl<T: Ord> AddAssign for Stream<T> {
         let mut rhs_samples = rhs.summary.into_iter().peekable();
         let mut started_self = false;
         let mut started_rhs = false;
-        loop {
-            match (self_samples.peek(), rhs_samples.peek()) {
-                (Some(self_sample), Some(rhs_sample)) => {
-                    // Detect next sample
-                    let (next_sample, additional_delta) = if self_sample.v < rhs_sample.v {
-                        started_self = true;
-                        (
-                            self_samples.next().unwrap(),
-                            if started_rhs {
-                                additional_self_delta
-                            } else {
-                                0
-                            },
-                        )
+        while let (Some(self_sample), Some(rhs_sample)) = (self_samples.peek(), rhs_samples.peek())
+        {
+            // Detect next sample
+            let (next_sample, additional_delta) = if self_sample.v < rhs_sample.v {
+                started_self = true;
+                (
+                    self_samples.next().unwrap(),
+                    if started_rhs {
+                        additional_self_delta
                     } else {
-                        started_rhs = true;
-                        (
-                            rhs_samples.next().unwrap(),
-                            if started_self {
-                                additional_rhs_delta
-                            } else {
-                                0
-                            },
-                        )
-                    };
+                        0
+                    },
+                )
+            } else {
+                started_rhs = true;
+                (
+                    rhs_samples.next().unwrap(),
+                    if started_self {
+                        additional_rhs_delta
+                    } else {
+                        0
+                    },
+                )
+            };
 
-                    // Insert it
-                    let next_sample = Tuple {
-                        v: next_sample.v,
-                        g: next_sample.g,
-                        delta: next_sample.delta + additional_delta,
-                    };
-                    merged_summary.push(next_sample);
-                }
-                _ => break,
-            }
+            // Insert it
+            let next_sample = Tuple {
+                v: next_sample.v,
+                g: next_sample.g,
+                delta: next_sample.delta + additional_delta,
+            };
+            merged_summary.push(next_sample);
         }
 
         // Copy the remaining samples from the rhs list

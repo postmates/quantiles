@@ -135,7 +135,7 @@ impl<
         CKMS {
             n: 0,
 
-            insert_threshold: insert_threshold,
+            insert_threshold,
             inserts: 0,
 
             samples: Store::new(2048, error),
@@ -295,19 +295,18 @@ mod test {
     use super::*;
     use ckms::store::invariant;
     use quickcheck::{QuickCheck, TestResult};
+    use std::cmp::Ordering;
     use std::f64::consts::E;
 
-    fn percentile(data: &Vec<f64>, prcnt: f64) -> f64 {
+    fn percentile(data: &[f64], prcnt: f64) -> f64 {
         let idx = (prcnt * (data.len() as f64)) as usize;
-        return data[idx];
+        data[idx]
     }
 
     #[test]
     fn test_cma() {
         fn inner(data: Vec<f64>, err: f64) -> TestResult {
-            if data.is_empty() {
-                return TestResult::discard();
-            } else if !(err >= 0.0) || !(err <= 1.0) {
+            if !between_inclusive(err, 0.0, 1.0) || data.is_empty() {
                 return TestResult::discard();
             }
 
@@ -322,7 +321,7 @@ mod test {
             assert!(mean.is_some());
 
             assert!((expected_mean - mean.unwrap()).abs() < err);
-            return TestResult::passed();
+            TestResult::passed()
         }
         QuickCheck::new().quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
@@ -330,7 +329,7 @@ mod test {
     #[test]
     fn test_cma_add_assign() {
         fn inner(l_data: Vec<f64>, r_data: Vec<f64>, err: f64) -> TestResult {
-            if !(err >= 0.0) || !(err <= 1.0) {
+            if !between_inclusive(err, 0.0, 1.0) {
                 return TestResult::discard();
             }
 
@@ -350,7 +349,7 @@ mod test {
             if mean.is_some() {
                 assert!((expected_mean - mean.unwrap()).abs() < err);
             }
-            return TestResult::passed();
+            TestResult::passed()
         }
         QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
     }
@@ -359,9 +358,7 @@ mod test {
     fn error_nominal_test() {
         fn inner(mut data: Vec<f64>, prcnt: f64) -> TestResult {
             data.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            if !(prcnt >= 0.0) || !(prcnt <= 1.0) {
-                return TestResult::discard();
-            } else if data.len() < 1 {
+            if !between_inclusive(prcnt, 0.0, 1.0) || data.is_empty() {
                 return TestResult::discard();
             }
             let err = 0.001;
@@ -388,17 +385,22 @@ mod test {
         QuickCheck::new().quickcheck(inner as fn(Vec<f64>, f64) -> TestResult);
     }
 
+    pub fn between_inclusive(val: f64, lower: f64, upper: f64) -> bool {
+        match val.partial_cmp(&lower) {
+            None | Some(Ordering::Less) => false,
+            _ => !matches!(val.partial_cmp(&upper), None | Some(Ordering::Greater)),
+        }
+    }
+
     #[test]
     fn error_nominal_with_merge_test() {
         fn inner(lhs: Vec<f64>, rhs: Vec<f64>, prcnt: f64, err: f64) -> TestResult {
-            if !(prcnt >= 0.0) || !(prcnt <= 1.0) {
-                return TestResult::discard();
-            } else if !(err >= 0.0) || !(err <= 1.0) {
-                return TestResult::discard();
-            } else if (lhs.len() + rhs.len()) < 1 {
-                return TestResult::discard();
-            }
-            if lhs.is_empty() || rhs.is_empty() {
+            if !between_inclusive(prcnt, 0.0, 1.0)
+                || !between_inclusive(err, 0.0, 1.0)
+                || (lhs.len() + rhs.len()) < 1
+                || lhs.is_empty()
+                || rhs.is_empty()
+            {
                 return TestResult::discard();
             }
             let mut data = lhs.clone();
@@ -476,7 +478,7 @@ mod test {
     fn query_invariant_test() {
         fn query_invariant(f: f64, fs: Vec<i32>) -> TestResult {
             let error = 0.001;
-            if fs.len() < 1 {
+            if fs.is_empty() {
                 return TestResult::discard();
             }
 
@@ -509,8 +511,8 @@ mod test {
             ckms.insert(i as f64);
         }
 
-        assert_eq!(0.0, ckms.samples[0].v);
-        assert_eq!(1.0, ckms.samples[1].v);
+        assert!((0.0 - ckms.samples[0].v).abs() < f64::EPSILON);
+        assert!((1.0 - ckms.samples[1].v).abs() < f64::EPSILON);
     }
 
     // prop: v_i-1 < v_i =< v_i+1
@@ -523,7 +525,7 @@ mod test {
                 ckms.insert(f);
             }
 
-            if ckms.samples.len() == 0 && fsc.len() == 0 {
+            if ckms.samples.is_empty() && fsc.is_empty() {
                 return TestResult::passed();
             }
             let mut cur = ckms.samples[0].v;
@@ -552,8 +554,8 @@ mod test {
             let s = ckms.samples.len();
             let mut r = 0;
             for i in 1..s {
-                let ref prev = ckms.samples[i - 1];
-                let ref cur = ckms.samples[i];
+                let prev = &ckms.samples[i - 1];
+                let cur = &ckms.samples[i];
 
                 r += prev.g;
 
@@ -608,7 +610,7 @@ mod test {
             // We have to choose an arbitrary, lowish constant for bound
             // invalidation buffer. This is because I don't have a precise
             // boundary. 1024 samples worth of slop isn't bad, I guess.
-            if !(s <= bound) && !((s - bound).abs() < 1_024) {
+            if s > bound && (s - bound).abs() >= 1_024 {
                 println!(
                     "error: {:?} n: {:?} log10: {:?}",
                     ckms.error_bound(),

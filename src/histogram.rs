@@ -204,7 +204,7 @@ where
         Ok(Histogram {
             count: 0,
             sum: None,
-            bins: bins,
+            bins,
         })
     }
 
@@ -225,7 +225,7 @@ where
     /// assert_eq!(histo.total_between(Bound::Finite(10), Bound::Finite(100)),
     /// 2);
     /// ```
-    pub fn insert(&mut self, value: T) -> ()
+    pub fn insert(&mut self, value: T)
     where
         T: ops::Add<Output = T>,
     {
@@ -452,13 +452,16 @@ mod test {
             if res.sum().is_some() {
                 match (x.sum().is_some(), y.sum().is_some()) {
                     (true, true) => {
-                        assert_eq!(res.sum().unwrap(), x.sum().unwrap() + y.sum().unwrap());
+                        assert!(
+                            (res.sum().unwrap() - (x.sum().unwrap() + y.sum().unwrap())).abs()
+                                < f64::EPSILON
+                        );
                     }
                     (false, true) => {
-                        assert_eq!(res.sum().unwrap(), y.sum().unwrap());
+                        assert!((res.sum().unwrap() - y.sum().unwrap()).abs() < f64::EPSILON);
                     }
                     (true, false) => {
-                        assert_eq!(res.sum().unwrap(), x.sum().unwrap());
+                        assert!((res.sum().unwrap() - x.sum().unwrap()).abs() < f64::EPSILON);
                     }
                     (false, false) => unreachable!(),
                 }
@@ -561,7 +564,7 @@ mod test {
                         }
 
                         let mut bounds: Vec<Bound<$t>> =
-                            bounds.into_iter().map(|x| Bound::Finite(x)).collect();
+                            bounds.into_iter().map(Bound::Finite).collect();
                         bounds.push(Bound::PosInf);
 
                         // confirm that the histogram has correctly binned by
@@ -572,14 +575,14 @@ mod test {
                             let mut below_count = 0;
                             for v in pyld.iter() {
                                 match b {
-                                    &Bound::Finite(ref bnd) => {
+                                    Bound::Finite(ref bnd) => {
                                         if v <= bnd {
                                             below_count += 1;
                                         } else {
                                             break;
                                         }
                                     }
-                                    &Bound::PosInf => {
+                                    Bound::PosInf => {
                                         below_count += 1;
                                     }
                                 }
@@ -606,7 +609,7 @@ mod test {
                         }
 
                         let mut bounds: Vec<Bound<$t>> =
-                            bounds.into_iter().map(|x| Bound::Finite(x)).collect();
+                            bounds.into_iter().map(Bound::Finite).collect();
                         bounds.push(Bound::PosInf);
 
                         // confirm that the histogram has correctly binned by
@@ -617,12 +620,12 @@ mod test {
                             let mut above_count = 0;
                             for v in pyld.iter() {
                                 match b {
-                                    &Bound::Finite(ref bnd) => {
+                                    Bound::Finite(ref bnd) => {
                                         if v > bnd {
                                             above_count += 1;
                                         }
                                     }
-                                    &Bound::PosInf => {}
+                                    Bound::PosInf => {}
                                 }
                             }
                             assert_eq!(above_count, histo.total_above(*b))
@@ -647,7 +650,7 @@ mod test {
                         }
 
                         let mut bounds: Vec<Bound<$t>> =
-                            bounds.into_iter().map(|x| Bound::Finite(x)).collect();
+                            bounds.into_iter().map(Bound::Finite).collect();
                         bounds.push(Bound::PosInf);
 
                         // confirm that the histogram has correctly binned by

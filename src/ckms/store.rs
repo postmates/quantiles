@@ -110,16 +110,16 @@ where
             g_sum: 0,
         };
         Store {
-            error: error,
+            error,
             data: vec![data],
-            inner_cap: inner_cap,
+            inner_cap,
             len: 0,
             n: 0,
         }
     }
 
     /// Insert a point into the Store
-    pub fn insert(&mut self, element: T) -> ()
+    pub fn insert(&mut self, element: T)
     where
         T: fmt::Debug,
     {
@@ -319,7 +319,7 @@ where
         // through the inner caches and combine those that are contiguous and
         // fit within inner_cap.
         cur_outer_idx = 0;
-        while (self.data.len() >= 1) && (cur_outer_idx < (self.data.len() - 1)) {
+        while !self.data.is_empty() && (cur_outer_idx < (self.data.len() - 1)) {
             if self.data[cur_outer_idx].data.len() + self.data[cur_outer_idx + 1].data.len()
                 <= self.inner_cap
             {
@@ -459,6 +459,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
+    use ckms::test::between_inclusive;
     use quickcheck::{QuickCheck, TestResult};
 
     #[test]
@@ -486,11 +487,7 @@ mod test {
     #[test]
     fn obey_inner_cap() {
         fn inner(data: Vec<f64>, inner_cap: usize, err: f64) -> TestResult {
-            if data.is_empty() {
-                return TestResult::discard();
-            } else if inner_cap == 0 {
-                return TestResult::discard();
-            } else if !(err >= 0.0) || !(err <= 1.0) {
+            if data.is_empty() || inner_cap == 0 || !between_inclusive(err, 0.0, 1.0) {
                 return TestResult::discard();
             }
 
@@ -503,7 +500,7 @@ mod test {
                 assert!(inner.len() <= store.inner_cap);
             }
 
-            return TestResult::passed();
+            TestResult::passed()
         }
         QuickCheck::new().quickcheck(inner as fn(Vec<f64>, usize, f64) -> TestResult);
     }
