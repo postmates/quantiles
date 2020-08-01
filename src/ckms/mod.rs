@@ -81,14 +81,14 @@ where
 }
 
 impl<
-    T: Copy
-        + PartialOrd
-        + Debug
-        + Add<Output = T>
-        + Sub<Output = T>
-        + Div<Output = T>
-        + std::convert::Into<f64>,
-> CKMS<T>
+        T: Copy
+            + PartialOrd
+            + Debug
+            + Add<Output = T>
+            + Sub<Output = T>
+            + Div<Output = T>
+            + std::convert::Into<f64>,
+    > CKMS<T>
 {
     /// Create a new CKMS
     ///
@@ -200,7 +200,8 @@ impl<
         self.last_in = Some(v);
         self.n += 1;
         let v_f64: f64 = v.into();
-        self.cma = self.cma
+        self.cma = self
+            .cma
             .map_or(Some(v_f64), |s| Some(s + ((v_f64 - s) / (self.n as f64))));
         self.samples.insert(v);
         self.inserts = (self.inserts + 1) % self.insert_threshold;
@@ -351,8 +352,7 @@ mod test {
             }
             return TestResult::passed();
         }
-        QuickCheck::new()
-            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64) -> TestResult);
     }
 
     #[test]
@@ -431,8 +431,7 @@ mod test {
                 TestResult::failed()
             }
         }
-        QuickCheck::new()
-            .quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
+        QuickCheck::new().quickcheck(inner as fn(Vec<f64>, Vec<f64>, f64, f64) -> TestResult);
     }
 
     #[test]
@@ -490,19 +489,17 @@ mod test {
 
             match ckms.query(phi) {
                 None => TestResult::passed(), /* invariant to check here? n*phi +
-                                                * f > 1? */
+                * f > 1? */
                 Some((rank, _)) => {
                     let nphi = phi * (ckms.n as f64);
                     let fdiv2 = (invariant(nphi, error) as f64) / 2.0;
                     TestResult::from_bool(
-                        ((nphi - fdiv2) <= (rank as f64))
-                            || ((rank as f64) <= (nphi + fdiv2)),
+                        ((nphi - fdiv2) <= (rank as f64)) || ((rank as f64) <= (nphi + fdiv2)),
                     )
                 }
             }
         }
-        QuickCheck::new()
-            .quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
+        QuickCheck::new().quickcheck(query_invariant as fn(f64, Vec<i32>) -> TestResult);
     }
 
     #[test]
@@ -606,7 +603,7 @@ mod test {
             let s = ckms.samples.len() as i64;
             let bound = ((1.0 / ckms.error_bound())
                 * (ckms.error_bound() * (ckms.count() as f64)).log10().powi(2))
-                .ceil() as i64;
+            .ceil() as i64;
 
             // We have to choose an arbitrary, lowish constant for bound
             // invalidation buffer. This is because I don't have a precise

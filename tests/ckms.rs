@@ -19,7 +19,8 @@ mod integration {
                 .expect("could not read resource file");
 
             for s in buffer.lines() {
-                let pyld: Vec<f64> = s.split_whitespace()
+                let pyld: Vec<f64> = s
+                    .split_whitespace()
                     .map(|f| f64::from_str(f))
                     .filter(|f| f.is_ok())
                     .map(|f| f.unwrap())

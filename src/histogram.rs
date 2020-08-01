@@ -633,58 +633,61 @@ mod test {
                     QuickCheck::new().quickcheck(inner as fn(Vec<$t>, Vec<$t>) -> TestResult);
                 }
 
-               #[test]
-               fn test_insertion_between_count() {
-                   fn inner(mut bounds: Vec<$t>, mut pyld: Vec<$t>) -> TestResult {
-                       if bounds.is_empty() {
-                           return TestResult::discard();
-                       }
-                       bounds.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                #[test]
+                fn test_insertion_between_count() {
+                    fn inner(mut bounds: Vec<$t>, mut pyld: Vec<$t>) -> TestResult {
+                        if bounds.is_empty() {
+                            return TestResult::discard();
+                        }
+                        bounds.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
-                       let mut histo = Histogram::new(bounds.clone()).unwrap();
-                       for i in pyld.clone() {
-                           histo.insert(i);
-                       }
+                        let mut histo = Histogram::new(bounds.clone()).unwrap();
+                        for i in pyld.clone() {
+                            histo.insert(i);
+                        }
 
-                       let mut bounds: Vec<Bound<$t>> =
-                           bounds.into_iter().map(|x| Bound::Finite(x)).collect();
-                       bounds.push(Bound::PosInf);
+                        let mut bounds: Vec<Bound<$t>> =
+                            bounds.into_iter().map(|x| Bound::Finite(x)).collect();
+                        bounds.push(Bound::PosInf);
 
-                       // confirm that the histogram has correctly binned by
-                       // asserting that for every (lower, upper] bound the
-                       // correct number of payload items are recorded between
-                       // that bound
-                       pyld.sort_by(|a, b| a.partial_cmp(b).unwrap());
-                       for lower_b in bounds.iter() {
-                           for upper_b in bounds.iter() {
-                               let mut between_count = 0;
-                               if lower_b < upper_b {
-                                   for v in pyld.iter() {
-                                       match (lower_b, upper_b) {
-                                           (&Bound::Finite(ref lw_b), &Bound::Finite(ref up_b)) => {
-                                               if v > lw_b && v <= up_b {
-                                                   between_count += 1;
-                                               }
-                                           }
-                                           (&Bound::Finite(ref lw_b), &Bound::PosInf) => {
-                                               if v > lw_b {
-                                                   between_count += 1;
-                                               }
-                                           }
-                                           _ => {}
-                                       }
-                                   }
-                               }
-                               assert_eq!(between_count, histo.total_between(*lower_b, *upper_b))
-                           }
-                       }
+                        // confirm that the histogram has correctly binned by
+                        // asserting that for every (lower, upper] bound the
+                        // correct number of payload items are recorded between
+                        // that bound
+                        pyld.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                        for lower_b in bounds.iter() {
+                            for upper_b in bounds.iter() {
+                                let mut between_count = 0;
+                                if lower_b < upper_b {
+                                    for v in pyld.iter() {
+                                        match (lower_b, upper_b) {
+                                            (
+                                                &Bound::Finite(ref lw_b),
+                                                &Bound::Finite(ref up_b),
+                                            ) => {
+                                                if v > lw_b && v <= up_b {
+                                                    between_count += 1;
+                                                }
+                                            }
+                                            (&Bound::Finite(ref lw_b), &Bound::PosInf) => {
+                                                if v > lw_b {
+                                                    between_count += 1;
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                assert_eq!(between_count, histo.total_between(*lower_b, *upper_b))
+                            }
+                        }
 
-                       TestResult::passed()
-                   }
-                   QuickCheck::new().quickcheck(inner as fn(Vec<$t>, Vec<$t>) -> TestResult);
-               }
+                        TestResult::passed()
+                    }
+                    QuickCheck::new().quickcheck(inner as fn(Vec<$t>, Vec<$t>) -> TestResult);
+                }
             }
-        }
+        };
     }
     // Why no generation for u8? Please see note on Histogram.
     generate_tests!(u16, u16);

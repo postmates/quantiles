@@ -45,8 +45,8 @@
 //! assert!(in_range(3usize, *counts.get(&3).unwrap()));
 //! ```
 
-use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 
 /// Calculates the `k` most frequent elements in the iterable
 /// stream of elements `stream` using an ε-approximate frequency count where ε
@@ -66,10 +66,12 @@ where
                 *item.get_mut() += 1;
                 counted = true;
             }
-            Entry::Vacant(slot) => if counters_len < k {
-                slot.insert(1);
-                counted = true;
-            },
+            Entry::Vacant(slot) => {
+                if counters_len < k {
+                    slot.insert(1);
+                    counted = true;
+                }
+            }
         }
 
         if !counted {

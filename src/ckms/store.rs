@@ -95,8 +95,8 @@ where
     pub data: Vec<Inner<T>>,
 
     inner_cap: usize, // maximum size of an Inner
-    len: usize, // samples currently stored
-    n: usize,   // total samples ever stored
+    len: usize,       // samples currently stored
+    n: usize,         // total samples ever stored
 }
 
 impl<T> Store<T>
