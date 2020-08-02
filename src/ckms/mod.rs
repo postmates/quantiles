@@ -353,10 +353,11 @@ mod test {
             assert_ne!(
                 result,
                 Some(Ordering::Greater),
-                "total_points: {} | idx: {} | rank: {} | quantile: {} | {} > {}",
+                "total_points: {} | idx: {} | (rank, actual): ({}, {}) | quantile: {} | {} > {}",
+                total_points,
                 idx,
                 rank,
-                total_points,
+                actual,
                 q,
                 diff,
                 error
