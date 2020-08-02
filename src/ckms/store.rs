@@ -16,10 +16,9 @@
 //! constructed of nested Vecs of bounded sized -- which contains at each 'node'
 //! all the information we need to perform an insert, as if we had examined
 //! every sample in the block. Anyhow, we'll get into it below.
+use crate::ckms::entry::Entry;
 use std::fmt;
 use std::ops::{Index, IndexMut};
-
-use ckms::entry::Entry;
 
 /// The all-important CKMS invariant.
 pub fn invariant(r: f64, error: f64) -> u32 {
@@ -459,7 +458,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use ckms::test::between_inclusive;
+    use crate::ckms::test::between_inclusive;
     use quickcheck::{QuickCheck, TestResult};
 
     #[test]

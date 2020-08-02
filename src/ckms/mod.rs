@@ -213,7 +213,7 @@ impl<
     /// Query CKMS for a ε-approximate quantile
     ///
     /// This function returns an approximation to the true quantile-- +/- εΦn
-    /// --for the points inserted. Argument q is valid 0. <= q <= 1.0. The first
+    /// --for the points inserted. Argument q is valid 0.0 <= q <= 1.0. The first
     /// element of the return tuple is the rank estimation for q, the second
     /// element is the quantile estimation for q. The minimum and maximum
     /// quantile, corresponding to 0.0 and 1.0 respectively, are always known
@@ -293,14 +293,54 @@ impl<
 #[cfg(test)]
 mod test {
     use super::*;
-    use ckms::store::invariant;
+    use crate::ckms::store::invariant;
     use quickcheck::{QuickCheck, TestResult};
+    use std::cmp;
     use std::cmp::Ordering;
     use std::f64::consts::E;
 
     fn percentile(data: &[f64], prcnt: f64) -> f64 {
         let idx = (prcnt * (data.len() as f64)) as usize;
         data[idx]
+    }
+
+    #[test]
+    fn test_large_insert() {
+        let error = 0.001;
+        for total_points in 1000..10_000 {
+            let mut data = Vec::<u16>::new();
+            let mut ckms = CKMS::<u16>::new(error);
+
+            for v in 0..total_points {
+                data.push(v);
+                ckms.insert(v);
+            }
+
+            data.sort();
+
+            for p in 0..1001 {
+                let q = p as f64 / 1000.0;
+                let idx = cmp::max(1, (q * total_points as f64).ceil() as usize);
+                let expected = data[idx - 1];
+                let (_rank, actual) = ckms.query(q).unwrap();
+                let diff = if expected > actual {
+                    expected - actual
+                } else {
+                    actual - expected
+                };
+                let result = (diff as f64).partial_cmp(&error);
+                assert!(result.is_some());
+                assert_ne!(
+                    result,
+                    Some(Ordering::Greater),
+                    "total_points: {} | quantile: {} | {} > {}",
+                    total_points,
+                    q,
+                    diff,
+                    error
+                );
+            }
+        }
     }
 
     #[test]

@@ -2,6 +2,7 @@
 name = "quantiles"
 version = "0.7.1"
 authors = ["Brian L. Troutwine <blt@postmates.com>"]
+edition = "2018"
 
 description = "a collection of approximate quantile algorithms"
 repository = "https://github.com/postmates/quantiles"
