@@ -305,41 +305,62 @@ mod test {
     }
 
     #[test]
-    fn test_large_insert() {
+    fn test_insert() {
         let error = 0.001;
-        for total_points in 1000..10_000 {
-            let mut data = Vec::<u16>::new();
-            let mut ckms = CKMS::<u16>::new(error);
+        let total_points = 10;
 
-            for v in 0..total_points {
-                data.push(v);
-                ckms.insert(v);
-            }
+        let mut data = Vec::<u16>::new();
+        let mut ckms = CKMS::<u16>::new(error);
 
-            data.sort();
+        for v in 0..total_points {
+            data.push(v);
+            ckms.insert(v);
+        }
 
-            for p in 0..1001 {
-                let q = p as f64 / 1000.0;
-                let idx = cmp::max(1, (q * total_points as f64).ceil() as usize);
-                let expected = data[idx - 1];
-                let (_rank, actual) = ckms.query(q).unwrap();
-                let diff = if expected > actual {
-                    expected - actual
-                } else {
-                    actual - expected
-                };
-                let result = (diff as f64).partial_cmp(&error);
-                assert!(result.is_some());
-                assert_ne!(
-                    result,
-                    Some(Ordering::Greater),
-                    "total_points: {} | quantile: {} | {} > {}",
-                    total_points,
-                    q,
-                    diff,
-                    error
-                );
-            }
+        assert_eq!(ckms.query(0.0), Some((1, 0)));
+        assert_eq!(ckms.query(0.001), Some((1, 0)));
+        assert_eq!(ckms.query(0.01), Some((1, 0)));
+        assert_eq!(ckms.query(0.1), Some((1, 0)));
+        assert_eq!(ckms.query(0.101), Some((1, 0)));
+        assert_eq!(ckms.query(0.14), Some((1, 0)));
+        assert_eq!(ckms.query(0.145), Some((1, 0)));
+        assert_eq!(ckms.query(0.146), Some((1, 0)));
+        assert_eq!(ckms.query(0.15), Some((2, 1)));
+        assert_eq!(ckms.query(0.199), Some((2, 1)));
+        assert_eq!(ckms.query(0.2), Some((2, 1)));
+        assert_eq!(ckms.query(0.3), Some((3, 2)));
+        assert_eq!(ckms.query(0.4), Some((4, 3)));
+        assert_eq!(ckms.query(0.5), Some((5, 4)));
+        assert_eq!(ckms.query(0.6), Some((6, 5)));
+        assert_eq!(ckms.query(0.7), Some((7, 6)));
+        assert_eq!(ckms.query(0.8), Some((8, 7)));
+        assert_eq!(ckms.query(0.9), Some((9, 8)));
+        assert_eq!(ckms.query(1.0), Some((10, 9)));
+
+        for q in &[
+            0.0, 0.001, 0.01, 0.1, 0.101, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+        ] {
+            let idx = cmp::max(1, (q * total_points as f64).ceil() as usize);
+            let expected = data[idx - 1];
+            let (rank, actual) = ckms.query(*q).unwrap();
+            let diff = if expected > actual {
+                expected - actual
+            } else {
+                actual - expected
+            };
+            let result = (diff as f64).partial_cmp(&error);
+            assert!(result.is_some());
+            assert_ne!(
+                result,
+                Some(Ordering::Greater),
+                "total_points: {} | idx: {} | rank: {} | quantile: {} | {} > {}",
+                idx,
+                rank,
+                total_points,
+                q,
+                diff,
+                error
+            );
         }
     }
 
