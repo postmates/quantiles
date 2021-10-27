@@ -1,3 +1,6 @@
+# Now Archived and Forked
+_quantiles_ will not be maintained in this repository going forward. Please use, create issues on, and make PRs to the fork of _quantiles_ located [here](https://github.com/blt/quantiles).
+
 # quantiles
 
 [![Build Status](https://travis-ci.org/postmates/quantiles.svg?branch=master)](https://travis-ci.org/postmates/quantiles) [![Codecov](https://img.shields.io/codecov/c/github/postmates/quantiles.svg)](https://codecov.io/gh/postmates/quantiles) [![Crates.io](https://img.shields.io/crates/v/quantiles.svg)](https://crates.io/crates/quantiles)
